@@ -40,6 +40,10 @@ $nextName = "$major.$minor.$patch"
 $content = [regex]::Replace($content, 'versionCode\s+\d+', "versionCode $nextCode", 1)
 $content = [regex]::Replace($content, 'versionName\s+"\d+\.\d+\.\d+"', "versionName `"$nextName`"", 1)
 
-Set-Content -Path $gradleFile -Value $content -Encoding UTF8
+[System.IO.File]::WriteAllText(
+    $gradleFile,
+    $content,
+    [System.Text.UTF8Encoding]::new($false)
+)
 
 Write-Host "Updated app version to versionCode=$nextCode versionName=$nextName"
