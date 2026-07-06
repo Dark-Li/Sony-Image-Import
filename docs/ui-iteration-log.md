@@ -201,3 +201,33 @@
 ### Notes
 - The tested `DSC09918.JPG` and `DSC09919.JPG` appear to be landscape frames with portrait subjects, so they do not prove the vertical-photo orientation case by themselves.
 - The preview now prefers original JPEG bytes when available, which is the correct path for vertical photos whose EXIF orientation is only present on the original file.
+
+## 2026-07-06 Preview Controls, Zoom, and Cache Cleanup
+
+### Implemented in this iteration
+- Moved the preview bottom controls upward and reduced button sizes so Import/Select/Previous/Next are less likely to be clipped on phones with different navigation bars, rounded corners, or display cutouts.
+- Added pinch-to-zoom preview support:
+  - Each preview page tracks its own zoom state.
+  - Scale is clamped between 1x and 5x.
+  - Pan is enabled while zoomed and resets when the image returns to 1x.
+- Added disk image-cache maintenance:
+  - Cache files live under `cache/sonyedge-image-cache`.
+  - A cleanup pass runs at most every 12 hours from image loading.
+  - Files not accessed for 7 days are deleted.
+  - Disk-cache hits refresh `lastModified`, so actively used thumbnails/previews are retained.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Installed and launched on device `909e29e1`.
+- Connected to the A7R III camera Wi-Fi and opened `Camera / PhotoRoot / Date / 2024-6-8`.
+- Opened `DSC09918.JPG` preview and verified the bottom controls are visually fully visible after the safe-area adjustment.
+- Verified the app process remained alive and logcat showed no `FATAL EXCEPTION` after opening the preview.
+- Verified image cache directory exists on-device with cached `.img` files via `run-as com.codex.sonyedge`.
+
+### Screenshot evidence
+- `build/device-screenshots/sonyedge-preview-zoom-ui-20260706.png`
+- `build/device-screenshots/sonyedge-preview-bottom-safe-2-20260706.png`
+
+### Notes
+- ADB cannot reliably perform true multi-touch pinch gestures with the simple `input` command set used here, so pinch-to-zoom still needs a quick hand test on the device.
+- The cache cleanup policy is verified by source and by confirming the runtime cache directory/files; full 7-day expiry is time-based and should not be forced by changing the phone clock during camera-transfer testing.

@@ -14,6 +14,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,10 +93,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -112,6 +118,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import kotlin.math.abs
 
 private val SonyBlue = Color(0xFF0057B8)
 private val SonyBlueDark = Color(0xFF073A73)
@@ -127,6 +134,11 @@ private val SuccessSoft = Color(0xFFE6FFFA)
 private val imageCache = object : LruCache<String, Bitmap>(128 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
 }
+
+private const val IMAGE_DISK_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
+private const val IMAGE_DISK_CACHE_CLEANUP_INTERVAL_MS = 12L * 60L * 60L * 1000L
+private val imageDiskCacheCleanupLock = Any()
+private var lastImageDiskCacheCleanupAt = 0L
 
 private data class NavSpec(val tab: SonyEdgeTab, val label: String, val icon: ImageVector)
 
@@ -1164,7 +1176,7 @@ private fun PhotoPreview(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .height(140.dp)
+                            .height(176.dp)
                             .background(
                                 Brush.verticalGradient(
                                     listOf(Color.Transparent, Color.Black.copy(alpha = 0.76f))
@@ -1176,12 +1188,12 @@ private fun PhotoPreview(
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                .padding(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 28.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.30f), contentColor = Color.White) {
-                                IconButton(onClick = onPrevious, enabled = canPrevious, modifier = Modifier.size(46.dp)) {
+                                IconButton(onClick = onPrevious, enabled = canPrevious, modifier = Modifier.size(42.dp)) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                         contentDescription = "Previous photo",
@@ -1191,7 +1203,7 @@ private fun PhotoPreview(
                             }
                             Button(
                                 onClick = onDownload,
-                                modifier = Modifier.weight(1f).height(46.dp),
+                                modifier = Modifier.weight(1f).height(44.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = SonyBlue),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
@@ -1201,17 +1213,17 @@ private fun PhotoPreview(
                             }
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
+                                    .size(42.dp)
                                     .semantics {
                                         contentDescription = if (selected) "Deselect photo" else "Select photo"
                                     }
                                     .clickable { onSelect(currentItem) },
                                 contentAlignment = Alignment.Center
                             ) {
-                                SelectCircle(selected = selected, size = 40.dp)
+                                SelectCircle(selected = selected, size = 38.dp)
                             }
                             Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.30f), contentColor = Color.White) {
-                                IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(46.dp)) {
+                                IconButton(onClick = onNext, enabled = canNext, modifier = Modifier.size(42.dp)) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                         contentDescription = "Next photo",
@@ -1250,13 +1262,61 @@ private fun ProgressiveCameraImage(
     if (bitmap == null) {
         PreviewLoadingPlaceholder(modifier)
     } else {
-        Image(
-            bitmap = bitmap.asImageBitmap(),
-            contentDescription = null,
-            contentScale = contentScale,
-            modifier = modifier.background(Color(0xFF0B1220))
+        ZoomablePreviewImage(
+            bitmap = bitmap,
+            modifier = modifier,
+            contentScale = contentScale
         )
     }
+}
+
+@Composable
+private fun ZoomablePreviewImage(bitmap: Bitmap, modifier: Modifier, contentScale: ContentScale) {
+    var scale by remember(bitmap) { mutableStateOf(1f) }
+    var offset by remember(bitmap) { mutableStateOf(Offset.Zero) }
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = null,
+        contentScale = contentScale,
+        modifier = modifier
+            .background(Color(0xFF0B1220))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = offset.x
+                translationY = offset.y
+            }
+            .pointerInput(bitmap) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var hasPressedPointers: Boolean
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        hasPressedPointers = pressed.isNotEmpty()
+                        val zoom = event.calculateZoom()
+                        val pan = event.calculatePan()
+                        if (pressed.size > 1 || scale > 1f) {
+                            val nextScale = (scale * zoom).coerceIn(1f, 5f)
+                            val zoomChanged = abs(nextScale - scale) > 0.001f
+                            scale = nextScale
+                            offset = if (scale <= 1.01f) {
+                                Offset.Zero
+                            } else {
+                                offset + pan
+                            }
+                            if (zoomChanged || pan != Offset.Zero) {
+                                event.changes.forEach { change -> change.consume() }
+                            }
+                        }
+                    } while (hasPressedPointers)
+                    if (scale <= 1.01f) {
+                        scale = 1f
+                        offset = Offset.Zero
+                    }
+                }
+            }
+    )
 }
 
 @Composable
@@ -1313,11 +1373,13 @@ private fun PreviewLoadingPlaceholder(modifier: Modifier) {
 
 private suspend fun loadBitmap(context: Context, url: String, maxDimension: Int): Bitmap? = withContext(Dispatchers.IO) {
     if (url.isBlank()) return@withContext null
+    cleanupExpiredImageCache(context)
     val memoryKey = "$url@$maxDimension"
     imageCache.get(memoryKey)?.let { return@withContext it }
     val diskFile = imageCacheFile(context, url)
     if (diskFile.isFile && diskFile.length() > 0) {
         decodeSampledBitmap(diskFile.readBytes(), maxDimension)?.let { bitmap ->
+            runCatching { diskFile.setLastModified(System.currentTimeMillis()) }
             imageCache.put(memoryKey, bitmap)
             return@withContext bitmap
         }
@@ -1397,6 +1459,23 @@ private fun imageCacheFile(context: Context, url: String): File {
     val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))
     val name = digest.joinToString("") { "%02x".format(it) }
     return File(File(context.cacheDir, "sonyedge-image-cache"), "$name.img")
+}
+
+private fun cleanupExpiredImageCache(context: Context) {
+    val now = System.currentTimeMillis()
+    synchronized(imageDiskCacheCleanupLock) {
+        if (now - lastImageDiskCacheCleanupAt < IMAGE_DISK_CACHE_CLEANUP_INTERVAL_MS) return
+        lastImageDiskCacheCleanupAt = now
+    }
+    val cacheDir = File(context.cacheDir, "sonyedge-image-cache")
+    val expiresBefore = now - IMAGE_DISK_CACHE_TTL_MS
+    runCatching {
+        cacheDir.listFiles()?.forEach { file ->
+            if (file.isFile && file.lastModified() in 1 until expiresBefore) {
+                file.delete()
+            }
+        }
+    }
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
