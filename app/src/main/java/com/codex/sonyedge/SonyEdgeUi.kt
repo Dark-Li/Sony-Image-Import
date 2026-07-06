@@ -1,10 +1,13 @@
 package com.codex.sonyedge
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.util.LruCache
+import android.view.View
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -75,6 +78,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1035,8 +1039,37 @@ private fun PhotoPreview(
     if (items.isEmpty()) return
     val startPage = currentIndex.coerceIn(items.indices)
     val pagerState = rememberPagerState(initialPage = startPage, pageCount = { items.size })
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    val hostActivity = LocalContext.current.findActivity()
+    DisposableEffect(hostActivity) {
+        val window = hostActivity?.window
+        val previousStatusColor = window?.statusBarColor
+        val previousNavigationColor = window?.navigationBarColor
+        val previousFlags = window?.decorView?.systemUiVisibility
+        if (window != null) {
+            window.statusBarColor = android.graphics.Color.rgb(11, 18, 32)
+            window.navigationBarColor = android.graphics.Color.rgb(11, 18, 32)
+            val darkBarFlags = window.decorView.systemUiVisibility
+                .and(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv())
+                .and(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv())
+            window.decorView.systemUiVisibility = darkBarFlags
+        }
+        onDispose {
+            if (window != null) {
+                if (previousStatusColor != null) window.statusBarColor = previousStatusColor
+                if (previousNavigationColor != null) window.navigationBarColor = previousNavigationColor
+                if (previousFlags != null) window.decorView.systemUiVisibility = previousFlags
+            }
+        }
+    }
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
         Surface(Modifier.fillMaxSize(), color = Color(0xFF0B1220)) {
+            val context = LocalContext.current.applicationContext
             var controlsVisible by remember { mutableStateOf(true) }
             LaunchedEffect(currentIndex) {
                 val target = currentIndex.coerceIn(items.indices)
@@ -1054,7 +1087,20 @@ private fun PhotoPreview(
             val selected = selectedKeys.contains(itemKey(currentItem))
             val canPrevious = page > 0
             val canNext = page < items.lastIndex
-            Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            LaunchedEffect(page, items) {
+                val start = (page - 2).coerceAtLeast(0)
+                val end = (page + 2).coerceAtMost(items.lastIndex)
+                for (index in start..end) {
+                    val item = items[index]
+                    if (!isVideoItem(item)) {
+                        loadBitmap(context, item.previewUrl(), 900)
+                        if (index == page || index == page + 1) {
+                            loadBitmap(context, previewPrimaryUrl(item), 2400)
+                        }
+                    }
+                }
+            }
+            Box(Modifier.fillMaxSize()) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
@@ -1069,7 +1115,7 @@ private fun PhotoPreview(
                         MediaPlaceholder(Icons.Default.Movie, Modifier.fillMaxSize())
                     } else {
                         ProgressiveCameraImage(
-                            primaryUrl = frameItem.largeUrl?.takeIf { url -> url.isNotBlank() } ?: frameItem.previewUrl(),
+                            primaryUrl = previewPrimaryUrl(frameItem),
                             fallbackUrl = frameItem.previewUrl(),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit,
@@ -1083,10 +1129,10 @@ private fun PhotoPreview(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .fillMaxWidth()
-                            .height(128.dp)
+                            .height(112.dp)
                             .background(
                                 Brush.verticalGradient(
-                                    listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)
+                                    listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent)
                                 )
                             )
                     ) {
@@ -1094,7 +1140,8 @@ private fun PhotoPreview(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .statusBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -1117,7 +1164,7 @@ private fun PhotoPreview(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .height(154.dp)
+                            .height(140.dp)
                             .background(
                                 Brush.verticalGradient(
                                     listOf(Color.Transparent, Color.Black.copy(alpha = 0.76f))
@@ -1128,6 +1175,7 @@ private fun PhotoPreview(
                             Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
+                                .navigationBarsPadding()
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -1349,6 +1397,30 @@ private fun imageCacheFile(context: Context, url: String): File {
     val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))
     val name = digest.joinToString("") { "%02x".format(it) }
     return File(File(context.cacheDir, "sonyedge-image-cache"), "$name.img")
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun previewPrimaryUrl(item: CameraContentItem): String {
+    val original = item.originalUrl.orEmpty()
+    if (isDecodableStillUrl(original)) return original
+    val large = item.largeUrl.orEmpty()
+    if (isDecodableStillUrl(large)) return large
+    return item.previewUrl()
+}
+
+private fun isDecodableStillUrl(url: String): Boolean {
+    if (url.isBlank()) return false
+    val lower = url.lowercase()
+    return lower.contains(".jpg") ||
+        lower.contains(".jpeg") ||
+        lower.contains("%2fjpeg") ||
+        lower.contains("image/jpeg") ||
+        lower.contains("image%2fjpeg")
 }
 
 private fun folderPath(state: SonyEdgeUiState): String {

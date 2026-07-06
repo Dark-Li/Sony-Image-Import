@@ -158,3 +158,46 @@
 - Continue reducing the Browse header height; it still consumes too much vertical space on phone screens.
 - Improve loading placeholders so unloaded thumbnails look like skeleton loading, not failed images.
 - Rework the preview overlay into a lighter top/bottom gradient treatment.
+
+## 2026-07-06 Preview Polish and ADB Validation
+
+### Implemented in this iteration
+- Reinstalled the app on device `909e29e1` after resolving the debug-signature mismatch by uninstalling only `com.codex.sonyedge`.
+- Updated the preview pipeline to prefer a decodable original JPEG URL for preview, falling back to the camera thumbnail/preview URL.
+- Kept EXIF-based bitmap orientation correction in the shared decode path so original JPEG previews can display with their embedded orientation.
+- Added preview-page prefetch for the current and nearby items to reduce black flashes while swiping through the full-screen pager.
+- Made the preview dialog draw edge-to-edge and switch the host status/navigation bars to the dark preview color while the preview is open, restoring the normal light bars on close.
+- Reduced the preview gradient overlay heights so controls feel lighter.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Installed and launched on device `909e29e1`.
+- Connected to the A7R III camera Wi-Fi and opened `Camera / PhotoRoot / Date / 2024-6-8`.
+- Verified 132-photo grid:
+  - Real thumbnails loaded in a 3-column grid.
+  - Scrolled down and back to the top; already loaded top thumbnails remained visible and correctly matched their filenames.
+- Verified preview:
+  - Opened `DSC09918.JPG`.
+  - Swiped horizontally to `DSC09919.JPG`.
+  - Status bar and navigation area now use the dark preview background instead of the previous gray system bar.
+  - Preview controls remained stable after swiping.
+- Verified directory back behavior:
+  - Closed preview and returned from `2024-6-8` to `Date`.
+  - The date list reappeared from cached state without a visible reload.
+- Verified selection mode:
+  - Long-pressed a photo in `2024-6-8`.
+  - Compact bottom bar displayed `1 selected`, `All`, and `Import (1)` without text clipping or overflow.
+
+### Screenshot evidence
+- `build/device-screenshots/sonyedge-home-ready2-20260706.png`
+- `build/device-screenshots/sonyedge-after-connect-20260706.png`
+- `build/device-screenshots/sonyedge-grid-132-20260706.png`
+- `build/device-screenshots/sonyedge-grid-scroll-return-20260706.png`
+- `build/device-screenshots/sonyedge-preview-bars-final-20260706.png`
+- `build/device-screenshots/sonyedge-preview-bars-final-swipe-20260706.png`
+- `build/device-screenshots/sonyedge-back-date-final-20260706.png`
+- `build/device-screenshots/sonyedge-selection-final-20260706.png`
+
+### Notes
+- The tested `DSC09918.JPG` and `DSC09919.JPG` appear to be landscape frames with portrait subjects, so they do not prove the vertical-photo orientation case by themselves.
+- The preview now prefers original JPEG bytes when available, which is the correct path for vertical photos whose EXIF orientation is only present on the original file.
