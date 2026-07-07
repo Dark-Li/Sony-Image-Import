@@ -1131,7 +1131,8 @@ private fun PhotoPreview(
                             fallbackUrl = frameItem.previewUrl(),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit,
-                            maxDimension = 2400
+                            maxDimension = 2400,
+                            resetZoomKey = pagerState.settledPage
                         )
                     }
                 }
@@ -1245,7 +1246,8 @@ private fun ProgressiveCameraImage(
     fallbackUrl: String?,
     modifier: Modifier,
     contentScale: ContentScale,
-    maxDimension: Int
+    maxDimension: Int,
+    resetZoomKey: Any? = Unit
 ) {
     val context = LocalContext.current
     val primary = primaryUrl.orEmpty()
@@ -1265,15 +1267,25 @@ private fun ProgressiveCameraImage(
         ZoomablePreviewImage(
             bitmap = bitmap,
             modifier = modifier,
-            contentScale = contentScale
+            contentScale = contentScale,
+            resetKey = resetZoomKey
         )
     }
 }
 
 @Composable
-private fun ZoomablePreviewImage(bitmap: Bitmap, modifier: Modifier, contentScale: ContentScale) {
+private fun ZoomablePreviewImage(
+    bitmap: Bitmap,
+    modifier: Modifier,
+    contentScale: ContentScale,
+    resetKey: Any?
+) {
     var scale by remember(bitmap) { mutableStateOf(1f) }
     var offset by remember(bitmap) { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(bitmap, resetKey) {
+        scale = 1f
+        offset = Offset.Zero
+    }
     Image(
         bitmap = bitmap.asImageBitmap(),
         contentDescription = null,

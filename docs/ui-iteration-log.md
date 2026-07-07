@@ -231,3 +231,16 @@
 ### Notes
 - ADB cannot reliably perform true multi-touch pinch gestures with the simple `input` command set used here, so pinch-to-zoom still needs a quick hand test on the device.
 - The cache cleanup policy is verified by source and by confirming the runtime cache directory/files; full 7-day expiry is time-based and should not be forced by changing the phone clock during camera-transfer testing.
+
+## 2026-07-07 Preview Zoom Page Reset
+
+### Implemented in this iteration
+- Reset fullscreen preview zoom scale and pan offset whenever the pager settles on a different photo.
+- This fixes the case where a zoomed photo stayed zoomed after swiping to another photo and then swiping back.
+- Kept normal 1x horizontal paging behavior unchanged; pinch zoom still consumes gestures only while multi-touch or already zoomed.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Versioned APK archived as `app/build/outputs/versioned-apk/SonyEdge-v0.1.5-6-debug-20260707-200626.apk`.
+- Installed successfully on ADB device `a109cf4`.
+- Device package info confirmed `versionCode=6` and `versionName=0.1.5`.
