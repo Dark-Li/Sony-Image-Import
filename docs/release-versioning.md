@@ -18,8 +18,8 @@ Use `minor` or `major` instead of `patch` for larger releases.
 
 Current baseline:
 
-- `versionCode`: 5
-- `versionName`: `0.1.4`
+- `versionCode`: 8
+- `versionName`: `0.1.7`
 
 This keeps installed builds distinguishable in Android settings and makes GitHub releases easier to track.
 

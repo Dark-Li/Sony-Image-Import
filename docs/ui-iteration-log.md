@@ -244,3 +244,24 @@
 - Versioned APK archived as `app/build/outputs/versioned-apk/SonyEdge-v0.1.5-6-debug-20260707-200626.apk`.
 - Installed successfully on ADB device `a109cf4`.
 - Device package info confirmed `versionCode=6` and `versionName=0.1.5`.
+
+## 2026-07-07 Preview Bottom Safe-Area Hardening
+
+### Implemented in this iteration
+- Changed the fullscreen preview bottom controls from a fixed-height overlay to content-measured layout.
+- Kept the same visual style and buttons, but moved `navigationBarsPadding()` onto the content container so tall gesture/navigation areas cannot squeeze or clip Import/Select controls.
+- Targeted the new test phone environment `a109cf4`, which reports `1440x3168` with `640dpi`, a useful stress case for oversized UI density.
+- After live camera testing still showed controls touching the bottom edge on `a109cf4`, added a fixed 40dp bottom safety spacer below the preview action row. This protects the controls even when Android does not report an effective navigation-bar inset inside the fullscreen dialog.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Versioned APK archived as `app/build/outputs/versioned-apk/SonyEdge-v0.1.6-7-debug-20260707-201139.apk`.
+- Installed successfully on ADB device `a109cf4`.
+- Device package info confirmed `versionCode=7` and `versionName=0.1.6`.
+- Captured launch screenshot at `build/device-screenshots/sonyedge-a109cf4-v016-home-20260707.png`.
+- Live camera preview verification before the 40dp spacer showed `Import`, `Select photo`, and `Next photo` bounds touching the physical bottom (`y=3168`) on `a109cf4`; this confirmed the original clipping risk.
+- Rebuilt after the spacer adjustment as `versionCode=8`, `versionName=0.1.7`.
+- Versioned APK archived as `app/build/outputs/versioned-apk/SonyEdge-v0.1.7-8-debug-20260707-201709.apk`.
+- Installed successfully on ADB device `a109cf4`.
+- Reopened the live camera path `Camera / PhotoRoot / Date / 2024-6-8 / DSC09918.JPG`.
+- Captured preview screenshot at `build/device-screenshots/sonyedge-a109cf4-preview-bottom-v017-pull-20260707.png`; Import, Select, Previous, and Next controls are visually fully visible above the bottom edge.

@@ -1173,23 +1173,21 @@ private fun PhotoPreview(
                         }
                     }
 
-                    Box(
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .height(176.dp)
                             .background(
                                 Brush.verticalGradient(
                                     listOf(Color.Transparent, Color.Black.copy(alpha = 0.76f))
                                 )
                             )
+                            .navigationBarsPadding()
+                            .padding(start = 10.dp, top = 56.dp, end = 10.dp)
                     ) {
                         Row(
                             Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .padding(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 28.dp),
+                                .fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1233,6 +1231,7 @@ private fun PhotoPreview(
                                 }
                             }
                         }
+                        Spacer(Modifier.height(40.dp))
                     }
                 }
             }
