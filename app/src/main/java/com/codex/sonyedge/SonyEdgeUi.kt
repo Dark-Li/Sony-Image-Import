@@ -8,6 +8,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.util.LruCache
 import android.view.View
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -100,12 +102,15 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -119,6 +124,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 private val SonyBlue = Color(0xFF0057B8)
 private val SonyBlueDark = Color(0xFF073A73)
@@ -137,6 +144,7 @@ private val imageCache = object : LruCache<String, Bitmap>(128 * 1024 * 1024) {
 
 private const val IMAGE_DISK_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
 private const val IMAGE_DISK_CACHE_CLEANUP_INTERVAL_MS = 12L * 60L * 60L * 1000L
+private const val IMAGE_DISK_CACHE_MAX_BYTES = 512L * 1024L * 1024L
 private val imageDiskCacheCleanupLock = Any()
 private var lastImageDiskCacheCleanupAt = 0L
 
@@ -171,6 +179,12 @@ fun SonyEdgeApp(
     onOpenGallery: () -> Unit,
     onClearLogs: () -> Unit
 ) {
+    val appContext = LocalContext.current.applicationContext
+    LaunchedEffect(appContext) {
+        withContext(Dispatchers.IO) {
+            cleanupExpiredImageCache(appContext, force = true)
+        }
+    }
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = SonyBlue,
@@ -1083,6 +1097,7 @@ private fun PhotoPreview(
         Surface(Modifier.fillMaxSize(), color = Color(0xFF0B1220)) {
             val context = LocalContext.current.applicationContext
             var controlsVisible by remember { mutableStateOf(true) }
+            var previewZoomed by remember { mutableStateOf(false) }
             LaunchedEffect(currentIndex) {
                 val target = currentIndex.coerceIn(items.indices)
                 if (pagerState.currentPage != target) {
@@ -1099,6 +1114,9 @@ private fun PhotoPreview(
             val selected = selectedKeys.contains(itemKey(currentItem))
             val canPrevious = page > 0
             val canNext = page < items.lastIndex
+            LaunchedEffect(page) {
+                previewZoomed = false
+            }
             LaunchedEffect(page, items) {
                 val start = (page - 2).coerceAtLeast(0)
                 val end = (page + 2).coerceAtMost(items.lastIndex)
@@ -1120,7 +1138,8 @@ private fun PhotoPreview(
                         .pointerInput(items.size) {
                             detectTapGestures(onTap = { controlsVisible = !controlsVisible })
                         },
-                    beyondViewportPageCount = 1
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = !previewZoomed
                 ) { pageIndex ->
                     val frameItem = items[pageIndex]
                     if (isVideoItem(frameItem)) {
@@ -1132,7 +1151,12 @@ private fun PhotoPreview(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit,
                             maxDimension = 2400,
-                            resetZoomKey = pagerState.settledPage
+                            resetZoomKey = pagerState.settledPage,
+                            onZoomChanged = { zoomed ->
+                                if (pageIndex == pagerState.currentPage) {
+                                    previewZoomed = zoomed
+                                }
+                            }
                         )
                     }
                 }
@@ -1246,7 +1270,8 @@ private fun ProgressiveCameraImage(
     modifier: Modifier,
     contentScale: ContentScale,
     maxDimension: Int,
-    resetZoomKey: Any? = Unit
+    resetZoomKey: Any? = Unit,
+    onZoomChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val primary = primaryUrl.orEmpty()
@@ -1267,7 +1292,8 @@ private fun ProgressiveCameraImage(
             bitmap = bitmap,
             modifier = modifier,
             contentScale = contentScale,
-            resetKey = resetZoomKey
+            resetKey = resetZoomKey,
+            onZoomChanged = onZoomChanged
         )
     }
 }
@@ -1277,27 +1303,91 @@ private fun ZoomablePreviewImage(
     bitmap: Bitmap,
     modifier: Modifier,
     contentScale: ContentScale,
-    resetKey: Any?
+    resetKey: Any?,
+    onZoomChanged: (Boolean) -> Unit
 ) {
     var scale by remember(bitmap) { mutableStateOf(1f) }
     var offset by remember(bitmap) { mutableStateOf(Offset.Zero) }
+    var animateTransform by remember(bitmap) { mutableStateOf(false) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    val transformSpec = tween<Float>(durationMillis = if (animateTransform) 180 else 0)
+    val displayedScale by animateFloatAsState(
+        targetValue = scale,
+        animationSpec = transformSpec,
+        label = "previewScale"
+    )
+    val displayedOffsetX by animateFloatAsState(
+        targetValue = offset.x,
+        animationSpec = transformSpec,
+        label = "previewOffsetX"
+    )
+    val displayedOffsetY by animateFloatAsState(
+        targetValue = offset.y,
+        animationSpec = transformSpec,
+        label = "previewOffsetY"
+    )
+
+    fun fittedImageSize(): Pair<Float, Float> {
+        val containerWidth = containerSize.width.toFloat()
+        val containerHeight = containerSize.height.toFloat()
+        if (containerWidth <= 0f || containerHeight <= 0f || bitmap.width <= 0 || bitmap.height <= 0) {
+            return containerWidth to containerHeight
+        }
+        if (contentScale != ContentScale.Fit) {
+            return containerWidth to containerHeight
+        }
+        val imageScale = min(containerWidth / bitmap.width.toFloat(), containerHeight / bitmap.height.toFloat())
+        return bitmap.width * imageScale to bitmap.height * imageScale
+    }
+
+    fun clampOffset(candidate: Offset, nextScale: Float): Offset {
+        if (nextScale <= 1.01f || containerSize.width <= 0 || containerSize.height <= 0) return Offset.Zero
+        val (imageWidth, imageHeight) = fittedImageSize()
+        val maxX = max(0f, (imageWidth * nextScale - containerSize.width) / 2f)
+        val maxY = max(0f, (imageHeight * nextScale - containerSize.height) / 2f)
+        return Offset(
+            x = candidate.x.coerceIn(-maxX, maxX),
+            y = candidate.y.coerceIn(-maxY, maxY)
+        )
+    }
+
     LaunchedEffect(bitmap, resetKey) {
+        animateTransform = false
         scale = 1f
         offset = Offset.Zero
+        onZoomChanged(false)
     }
-    Image(
-        bitmap = bitmap.asImageBitmap(),
-        contentDescription = null,
-        contentScale = contentScale,
+    LaunchedEffect(containerSize, bitmap, scale) {
+        offset = clampOffset(offset, scale)
+    }
+    Box(
         modifier = modifier
             .background(Color(0xFF0B1220))
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = offset.x
-                translationY = offset.y
+            .onSizeChanged { size ->
+                containerSize = size
             }
-            .pointerInput(bitmap) {
+            .pointerInput(bitmap, containerSize) {
+                detectTapGestures(
+                    onDoubleTap = { tapOffset ->
+                        val nextScale = if (scale > 1.01f) 1f else 2.5f
+                        val nextOffset = if (nextScale <= 1.01f) {
+                            Offset.Zero
+                        } else {
+                            val rawOffset = Offset(
+                                x = (containerSize.width / 2f - tapOffset.x) * (nextScale - 1f),
+                                y = (containerSize.height / 2f - tapOffset.y) * (nextScale - 1f)
+                            )
+                            clampOffset(rawOffset, nextScale)
+                        }
+                        animateTransform = true
+                        scale = nextScale
+                        offset = nextOffset
+                        onZoomChanged(nextScale > 1.01f)
+                    }
+                )
+            }
+            .pointerInput(bitmap, containerSize) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     var hasPressedPointers: Boolean
@@ -1305,29 +1395,54 @@ private fun ZoomablePreviewImage(
                         val event = awaitPointerEvent()
                         val pressed = event.changes.filter { it.pressed }
                         hasPressedPointers = pressed.isNotEmpty()
+                        val currentScale = scale
                         val zoom = event.calculateZoom()
                         val pan = event.calculatePan()
-                        if (pressed.size > 1 || scale > 1f) {
-                            val nextScale = (scale * zoom).coerceIn(1f, 5f)
-                            val zoomChanged = abs(nextScale - scale) > 0.001f
-                            scale = nextScale
-                            offset = if (scale <= 1.01f) {
+                        if (pressed.size > 1 || currentScale > 1.01f) {
+                            val nextScale = (currentScale * zoom).coerceIn(1f, 5f)
+                            val zoomChanged = abs(nextScale - currentScale) > 0.001f
+                            val nextOffset = if (nextScale <= 1.01f) {
                                 Offset.Zero
                             } else {
-                                offset + pan
+                                clampOffset(offset + pan, nextScale)
                             }
+                            animateTransform = false
+                            scale = nextScale
+                            offset = nextOffset
+                            onZoomChanged(nextScale > 1.01f)
                             if (zoomChanged || pan != Offset.Zero) {
                                 event.changes.forEach { change -> change.consume() }
                             }
                         }
                     } while (hasPressedPointers)
                     if (scale <= 1.01f) {
+                        animateTransform = false
                         scale = 1f
                         offset = Offset.Zero
+                        onZoomChanged(false)
                     }
                 }
-            }
-    )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        val (imageWidthPx, imageHeightPx) = fittedImageSize()
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier
+                .size(
+                    width = with(density) { max(1f, imageWidthPx).toDp() },
+                    height = with(density) { max(1f, imageHeightPx).toDp() }
+                )
+                .graphicsLayer {
+                    scaleX = displayedScale
+                    scaleY = displayedScale
+                    translationX = displayedOffsetX
+                    translationY = displayedOffsetY
+                }
+        )
+    }
 }
 
 @Composable
@@ -1472,19 +1587,36 @@ private fun imageCacheFile(context: Context, url: String): File {
     return File(File(context.cacheDir, "sonyedge-image-cache"), "$name.img")
 }
 
-private fun cleanupExpiredImageCache(context: Context) {
+private fun cleanupExpiredImageCache(context: Context, force: Boolean = false) {
     val now = System.currentTimeMillis()
     synchronized(imageDiskCacheCleanupLock) {
-        if (now - lastImageDiskCacheCleanupAt < IMAGE_DISK_CACHE_CLEANUP_INTERVAL_MS) return
+        if (!force && now - lastImageDiskCacheCleanupAt < IMAGE_DISK_CACHE_CLEANUP_INTERVAL_MS) return
         lastImageDiskCacheCleanupAt = now
     }
     val cacheDir = File(context.cacheDir, "sonyedge-image-cache")
     val expiresBefore = now - IMAGE_DISK_CACHE_TTL_MS
     runCatching {
-        cacheDir.listFiles()?.forEach { file ->
+        val files = cacheDir.listFiles()
+            ?.filter { it.isFile && it.length() > 0 }
+            .orEmpty()
+        files.forEach { file ->
             if (file.isFile && file.lastModified() in 1 until expiresBefore) {
                 file.delete()
             }
+        }
+        var totalBytes = cacheDir.listFiles()
+            ?.filter { it.isFile && it.length() > 0 }
+            ?.sumOf { it.length() }
+            ?: 0L
+        if (totalBytes > IMAGE_DISK_CACHE_MAX_BYTES) {
+            cacheDir.listFiles()
+                ?.filter { it.isFile && it.length() > 0 }
+                ?.sortedBy { it.lastModified() }
+                ?.forEach { file ->
+                    if (totalBytes <= IMAGE_DISK_CACHE_MAX_BYTES) return@forEach
+                    val fileBytes = file.length()
+                    if (file.delete()) totalBytes -= fileBytes
+                }
         }
     }
 }

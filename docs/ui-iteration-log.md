@@ -265,3 +265,43 @@
 - Installed successfully on ADB device `a109cf4`.
 - Reopened the live camera path `Camera / PhotoRoot / Date / 2024-6-8 / DSC09918.JPG`.
 - Captured preview screenshot at `build/device-screenshots/sonyedge-a109cf4-preview-bottom-v017-pull-20260707.png`; Import, Select, Previous, and Next controls are visually fully visible above the bottom edge.
+
+## 2026-07-07 Cache Cleanup Hardening
+
+### Implemented in this iteration
+- Run image disk-cache cleanup once when the Compose app starts, not only during image loading.
+- Keep the existing "not accessed for 7 days" expiry policy.
+- Added a 512MB disk-cache cap for `cache/sonyedge-image-cache`; when the cap is exceeded, oldest cache files are deleted first.
+- Kept the 12-hour throttle for routine cleanup during image loading so scrolling large folders does not repeatedly scan the cache directory.
+
+### Verification status
+- Built successfully with `:app:assembleDebug`.
+- Installed successfully on ADB device `a109cf4` as `versionName=0.1.8`, `versionCode=9`.
+- Verified startup cleanup by creating `cache/sonyedge-image-cache/stale-startup-test.img` with mtime `2025-01-01 00:00`; after app restart the file was deleted.
+- Cache file count after cleanup check: `102`.
+
+## 2026-07-07 Preview Zoom Gesture Fix
+
+### Implemented in this iteration
+- Track whether the current preview image is zoomed and disable `HorizontalPager` user scrolling while zoomed.
+- Clamp zoomed image panning to the fitted image bounds so a photo edge cannot be dragged into the middle of the preview.
+- Reset zoom and pan to centered `1x` whenever the settled preview page changes.
+- Added double-tap zoom toggle between `1x` and `2.5x` for a faster inspection gesture.
+- Move preview gesture handling to the full preview canvas, not just the rendered bitmap, so dragging on black letterbox areas still works.
+- Use immediate state updates while dragging for better finger tracking.
+- Use 180ms animated scale/offset transitions for double-tap zoom and zoom reset.
+
+### Verification status
+- Built successfully with `:app:assembleDebug`.
+- Installed successfully on ADB device `a109cf4` as `versionName=0.1.10`, `versionCode=11`.
+- Opened live camera path through `PhotoRoot / Date` into a 47-item folder and opened preview.
+- ADB verification: zoomed preview stayed on `DSC09968.JPG` / `2 / 47` after a horizontal drag.
+- ADB verification: after double-tap reset to `1x`, the same horizontal drag advanced to `DSC09969.JPG` / `3 / 47`.
+- Follow-up build installed successfully on ADB device `a109cf4` as `versionName=0.1.11`, `versionCode=12`.
+- ADB verification on the animated version: zoomed preview stayed on `DSC09967.JPG` / `1 / 47` after a horizontal drag.
+- ADB verification on the animated version: after double-tap reset to `1x`, the same horizontal drag advanced to `DSC09968.JPG` / `2 / 47`.
+- Captured evidence screenshots:
+  - `build/device-screenshots/sonyedge-v011-zoom-pan-tight.png`
+  - `build/device-screenshots/sonyedge-v011-reset-swipe.png`
+  - `build/device-screenshots/sonyedge-v012-zoom-pan.png`
+  - `build/device-screenshots/sonyedge-v012-reset-swipe.png`
