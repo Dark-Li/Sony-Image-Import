@@ -122,7 +122,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 repository.saveCachedEndpoint(service.controlUrl)
                 addLog("Connected: ${service.controlUrl}")
                 _uiState.update { it.copy(connectionState = ConnectionState.Connected, errorMessage = null) }
-                openFolder("0", "Camera", pushCurrent = false)
+                openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
             }.onFailure { ex ->
                 setError("Connect failed: ${ex.message}", SonyEdgeTab.Camera)
             }
@@ -162,7 +162,13 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun openFolder(id: String, title: String, pushCurrent: Boolean, preferCache: Boolean = true) {
+    private fun openFolder(
+        id: String,
+        title: String,
+        pushCurrent: Boolean,
+        preferCache: Boolean = true,
+        autoOpenDateDirectory: Boolean = false
+    ) {
         val service = activeService ?: repository.cachedService()
         if (service.controlUrl.isNullOrBlank()) {
             setError("Connect to the camera Wi-Fi first.", SonyEdgeTab.Camera)
@@ -180,6 +186,18 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         if (preferCache) {
             val cached = folderCache[id]
             if (cached != null) {
+                val autoTarget = autoNextDateFolder(cleanTitle(title, id), id, cached.folders, cached.photos, autoOpenDateDirectory)
+                if (autoTarget != null) {
+                    applyFolder(
+                        cached = cached.copy(title = cleanTitle(title, id)),
+                        folderStack = nextStack,
+                        status = "Opening ${cleanTitle(autoTarget.title, autoTarget.id)}...",
+                        loading = true
+                    )
+                    addLog("Auto-opening ${cleanTitle(autoTarget.title, autoTarget.id)}")
+                    openFolder(autoTarget.id, autoTarget.title, pushCurrent = true, autoOpenDateDirectory = true)
+                    return
+                }
                 applyFolder(
                     cached = cached.copy(title = cleanTitle(title, id)),
                     folderStack = nextStack,
@@ -212,6 +230,12 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 if (requestId != browseRequestId) return@launch
                 val cached = CachedFolder(id, cleanTitle, result.containers, result.items)
                 folderCache[id] = cached
+                val autoTarget = autoNextDateFolder(cleanTitle, id, result.containers, result.items, autoOpenDateDirectory)
+                if (autoTarget != null) {
+                    addLog("Auto-opening ${cleanTitle(autoTarget.title, autoTarget.id)}")
+                    openFolder(autoTarget.id, autoTarget.title, pushCurrent = true, autoOpenDateDirectory = true)
+                    return@onSuccess
+                }
                 _uiState.update {
                     it.copy(
                         activeTab = if (result.items.isEmpty()) SonyEdgeTab.Camera else SonyEdgeTab.Library,
@@ -254,6 +278,26 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 selectedKeys = emptySet(),
                 previewIndex = null
             )
+        }
+    }
+
+    private fun autoNextDateFolder(
+        currentTitle: String,
+        currentId: String,
+        folders: List<DmsContainerItem>,
+        photos: List<CameraContentItem>,
+        enabled: Boolean
+    ): DmsContainerItem? {
+        if (!enabled || photos.isNotEmpty() || folders.isEmpty()) return null
+        val normalizedTitle = currentTitle.lowercase()
+        return when {
+            currentId == "0" || normalizedTitle == "camera" ->
+                folders.firstOrNull { cleanTitle(it.title, it.id).equals("PhotoRoot", ignoreCase = true) }
+
+            normalizedTitle == "photoroot" ->
+                folders.firstOrNull { cleanTitle(it.title, it.id).equals("Date", ignoreCase = true) }
+
+            else -> null
         }
     }
 

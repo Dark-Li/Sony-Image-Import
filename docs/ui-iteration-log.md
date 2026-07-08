@@ -265,6 +265,32 @@
 - `build/device-screenshots/sonyedge-complete-metrics-20260708.png`
 - `build/device-screenshots/sonyedge-complete-metrics-fixed-20260708.png`
 
+## 2026-07-08 Auto Open Date Folder
+
+### Implemented in this iteration
+- Changed the initial camera connection flow so `Connect and browse` automatically opens the camera's date-folder level.
+- The auto-open path is intentionally narrow:
+  - `Camera` -> `PhotoRoot`.
+  - `PhotoRoot` -> `Date`.
+  - Stop at `Date` so the user still chooses the shooting day manually.
+- Kept manual Root, Back, Refresh, and folder navigation behavior unchanged.
+- Preserved the folder stack so Back from a date folder still has normal navigation context.
+- Bumped the Android build to `versionCode 15` and `versionName 0.1.14`.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Archived versioned APK:
+  - `app/build/outputs/versioned-apk/SonyEdge-v0.1.14-15-debug-20260708-125018.apk`
+- Installed to device `909e29e1`.
+- Connected to the A7R III camera Wi-Fi.
+- From a fresh app launch, tapped `Connect and browse` once.
+- App landed directly on `Date` with path `Camera / PhotoRoot / Date`.
+- Date folder `2026-7-8` was visible without manually tapping `PhotoRoot` or `Date`.
+- Tapping `2026-7-8` still opened the photo grid with 3 photos.
+
+### Screenshot evidence
+- `build/device-screenshots/sonyedge-auto-date-folder-20260708.png`
+
 ### Notes
 - The tested `DSC09918.JPG` and `DSC09919.JPG` appear to be landscape frames with portrait subjects, so they do not prove the vertical-photo orientation case by themselves.
 - The preview now prefers original JPEG bytes when available, which is the correct path for vertical photos whose EXIF orientation is only present on the original file.
