@@ -44,6 +44,8 @@ public class DownloadService extends Service {
     public static final String EXTRA_BYTES_TOTAL = "bytes_total";
     public static final String EXTRA_SPEED_BPS = "speed_bps";
     public static final String EXTRA_ETA_SECONDS = "eta_seconds";
+    public static final String EXTRA_BATCH_BYTES_DONE = "batch_bytes_done";
+    public static final String EXTRA_ELAPSED_SECONDS = "elapsed_seconds";
 
     public static final String STATE_STARTED = "started";
     public static final String STATE_FILE_STARTED = "file_started";
@@ -100,6 +102,8 @@ public class DownloadService extends Service {
         int total = 0;
         int success = 0;
         int failed = 0;
+        long batchBytesDone = 0;
+        long startedAt = System.currentTimeMillis();
         try {
             JSONArray array = new JSONArray(itemsJson == null ? "[]" : itemsJson);
             total = array.length();
@@ -119,24 +123,94 @@ public class DownloadService extends Service {
                 publishProgress(STATE_FILE_STARTED, prefix + "Downloading " + item.title, total, i + 1, success, failed, item.title, "");
                 updateNotification(prefix + item.title);
                 try {
-                    DownloadValidator.ValidationResult result = downloadOne(item, dir, total, i + 1, success, failed);
+                    DownloadValidator.ValidationResult result = downloadOne(item, dir, total, i + 1, success, failed, batchBytesDone, startedAt);
+                    batchBytesDone += result.bytes;
                     success++;
-                    publishProgress(STATE_FILE_DONE, prefix + item.title + " -> " + result.toDisplayString(), total, i + 1, success, failed, item.title, "");
+                    publishProgress(
+                            STATE_FILE_DONE,
+                            prefix + item.title + " -> " + result.toDisplayString(),
+                            total,
+                            i + 1,
+                            success,
+                            failed,
+                            item.title,
+                            "",
+                            result.bytes,
+                            result.bytes,
+                            averageBytesPerSecond(batchBytesDone, startedAt),
+                            0,
+                            batchBytesDone,
+                            elapsedSeconds(startedAt)
+                    );
                 } catch (Exception ex) {
                     failed++;
-                    publishProgress(STATE_FILE_FAILED, prefix + item.title + " failed: " + ex.getMessage(), total, i + 1, success, failed, item.title, item.toJson().toString());
+                    publishProgress(
+                            STATE_FILE_FAILED,
+                            prefix + item.title + " failed: " + ex.getMessage(),
+                            total,
+                            i + 1,
+                            success,
+                            failed,
+                            item.title,
+                            item.toJson().toString(),
+                            0,
+                            0,
+                            averageBytesPerSecond(batchBytesDone, startedAt),
+                            0,
+                            batchBytesDone,
+                            elapsedSeconds(startedAt)
+                    );
                 }
             }
-            publishProgress(STATE_DONE, "Downloads complete. Success " + success + ", failed " + failed + ". Output: DCIM/Sony Picture", total, total, success, failed, "", "");
+            publishProgress(
+                    STATE_DONE,
+                    "Downloads complete. Success " + success + ", failed " + failed + ". Output: DCIM/Sony Picture",
+                    total,
+                    total,
+                    success,
+                    failed,
+                    "",
+                    "",
+                    0,
+                    0,
+                    averageBytesPerSecond(batchBytesDone, startedAt),
+                    0,
+                    batchBytesDone,
+                    elapsedSeconds(startedAt)
+            );
         } catch (Exception ex) {
-            publishProgress(STATE_FATAL, "Download failed: " + ex.getMessage(), total, 0, success, failed, "", "");
+            publishProgress(
+                    STATE_FATAL,
+                    "Download failed: " + ex.getMessage(),
+                    total,
+                    0,
+                    success,
+                    failed,
+                    "",
+                    "",
+                    0,
+                    0,
+                    averageBytesPerSecond(batchBytesDone, startedAt),
+                    0,
+                    batchBytesDone,
+                    elapsedSeconds(startedAt)
+            );
         } finally {
             stopForeground(STOP_FOREGROUND_DETACH);
             stopSelf();
         }
     }
 
-    private DownloadValidator.ValidationResult downloadOne(CameraContentItem item, File dir, int total, int index, int success, int failed) throws Exception {
+    private DownloadValidator.ValidationResult downloadOne(
+            CameraContentItem item,
+            File dir,
+            int total,
+            int index,
+            int success,
+            int failed,
+            long batchBytesBeforeFile,
+            long batchStartedAt
+    ) throws Exception {
         String urlText = item.bestDownloadUrl();
         if (urlText == null || urlText.isEmpty()) {
             throw new IllegalArgumentException("No download URL for " + item.title);
@@ -197,7 +271,9 @@ public class DownloadService extends Service {
                             bytesDone,
                             contentLength,
                             speedBps,
-                            etaSeconds
+                            etaSeconds,
+                            batchBytesBeforeFile + bytesDone,
+                            elapsedSeconds(batchStartedAt)
                     );
                     lastAt = now;
                     lastBytes = bytesDone;
@@ -433,7 +509,7 @@ public class DownloadService extends Service {
     }
 
     private void publishProgress(String state, String message, int total, int index, int success, int failed, String filename, String itemJson) {
-        publishProgress(state, message, total, index, success, failed, filename, itemJson, 0, 0, 0, 0);
+        publishProgress(state, message, total, index, success, failed, filename, itemJson, 0, 0, 0, 0, 0, 0);
     }
 
     private void publishProgress(
@@ -448,7 +524,9 @@ public class DownloadService extends Service {
             long bytesDone,
             long bytesTotal,
             long speedBps,
-            long etaSeconds
+            long etaSeconds,
+            long batchBytesDone,
+            long elapsedSeconds
     ) {
         Intent intent = new Intent(ACTION_PROGRESS);
         intent.setPackage(getPackageName());
@@ -464,7 +542,18 @@ public class DownloadService extends Service {
         intent.putExtra(EXTRA_BYTES_TOTAL, bytesTotal);
         intent.putExtra(EXTRA_SPEED_BPS, speedBps);
         intent.putExtra(EXTRA_ETA_SECONDS, etaSeconds);
+        intent.putExtra(EXTRA_BATCH_BYTES_DONE, batchBytesDone);
+        intent.putExtra(EXTRA_ELAPSED_SECONDS, elapsedSeconds);
         sendBroadcast(intent);
+    }
+
+    private long elapsedSeconds(long startedAt) {
+        return Math.max(0, (System.currentTimeMillis() - startedAt) / 1000L);
+    }
+
+    private long averageBytesPerSecond(long bytes, long startedAt) {
+        long elapsedMs = Math.max(1, System.currentTimeMillis() - startedAt);
+        return bytes <= 0 ? 0 : bytes * 1000L / elapsedMs;
     }
 
     private void updateNotification(String text) {

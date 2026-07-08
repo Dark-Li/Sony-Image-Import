@@ -230,6 +230,41 @@
 - `build/device-screenshots/sonyedge-transfer-speed-eta-progress-20260708.png`
 - `build/device-screenshots/sonyedge-transfer-speed-eta-complete-20260708.png`
 
+## 2026-07-08 Import Completion Metrics
+
+### Implemented in this iteration
+- Added batch-level transfer metrics from `DownloadService`:
+  - Total imported bytes.
+  - Batch elapsed time.
+  - Average transfer speed.
+- Kept live per-file metrics during transfer.
+- Added an Imports completion summary with `Total`, `Average`, and `Elapsed` cards after import finishes.
+- Reduced metric-card label/value text sizes so three completion cards fit on phone-width screens without clipping.
+- Added a local UX audit note under `docs/audits/2026-07-08-current-flow/`.
+- Bumped the Android build to `versionCode 14` and `versionName 0.1.13`.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Archived versioned APK:
+  - `app/build/outputs/versioned-apk/SonyEdge-v0.1.13-14-debug-20260708-123933.apk`
+- Installed to device `909e29e1`.
+- Connected to the A7R III camera Wi-Fi.
+- Browsed `Camera / PhotoRoot / Date / 2026-7-8`.
+- Imported one original photo successfully.
+- Verified live transfer metrics during import:
+  - Speed: `905 KB/s`.
+  - Remaining: `0:20`.
+  - Current file: `9.4 MB / 26.6 MB`.
+- Verified completion metrics after import:
+  - Total: `26.6 MB`.
+  - Average: `962 KB/s`.
+  - Elapsed: `0:28`.
+  - `1 imported / 0 failed`.
+
+### Screenshot evidence
+- `build/device-screenshots/sonyedge-complete-metrics-20260708.png`
+- `build/device-screenshots/sonyedge-complete-metrics-fixed-20260708.png`
+
 ### Notes
 - The tested `DSC09918.JPG` and `DSC09919.JPG` appear to be landscape frames with portrait subjects, so they do not prove the vertical-photo orientation case by themselves.
 - The preview now prefers original JPEG bytes when available, which is the correct path for vertical photos whose EXIF orientation is only present on the original file.

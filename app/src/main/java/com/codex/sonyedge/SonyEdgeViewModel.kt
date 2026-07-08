@@ -68,6 +68,8 @@ data class SonyEdgeUiState(
     val downloadBytesTotal: Long = 0,
     val downloadSpeedBps: Long = 0,
     val downloadEtaSeconds: Long = 0,
+    val downloadBatchBytesDone: Long = 0,
+    val downloadElapsedSeconds: Long = 0,
     val transferEvents: List<String> = emptyList(),
     val failedItems: List<CameraContentItem> = emptyList()
 ) {
@@ -349,6 +351,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 downloadBytesTotal = 0,
                 downloadSpeedBps = 0,
                 downloadEtaSeconds = 0,
+                downloadBatchBytesDone = 0,
+                downloadElapsedSeconds = 0,
                 failedItems = emptyList(),
                 transferEvents = listOf("Queued ${items.size} imports.")
             )
@@ -367,6 +371,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val bytesTotal = intent.getLongExtra(DownloadService.EXTRA_BYTES_TOTAL, 0).coerceAtLeast(0)
         val speedBps = intent.getLongExtra(DownloadService.EXTRA_SPEED_BPS, 0).coerceAtLeast(0)
         val etaSeconds = intent.getLongExtra(DownloadService.EXTRA_ETA_SECONDS, 0).coerceAtLeast(0)
+        val batchBytesDone = intent.getLongExtra(DownloadService.EXTRA_BATCH_BYTES_DONE, 0).coerceAtLeast(0)
+        val elapsedSeconds = intent.getLongExtra(DownloadService.EXTRA_ELAPSED_SECONDS, 0).coerceAtLeast(0)
         _uiState.update { current ->
             val completed = (success + failed).coerceIn(0, total)
             val events = if (state in eventStates && message.isNotBlank()) {
@@ -391,6 +397,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 downloadBytesTotal = bytesTotal,
                 downloadSpeedBps = speedBps,
                 downloadEtaSeconds = etaSeconds,
+                downloadBatchBytesDone = batchBytesDone,
+                downloadElapsedSeconds = elapsedSeconds,
                 transferEvents = events,
                 failedItems = failedItems
             )

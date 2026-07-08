@@ -574,6 +574,9 @@ private fun TransfersScreen(state: SonyEdgeUiState, onCancel: () -> Unit, onRetr
                 if (importing) {
                     Spacer(Modifier.height(12.dp))
                     TransferMetrics(state)
+                } else if (state.downloadTotal > 0 && state.downloadBatchBytesDone > 0) {
+                    Spacer(Modifier.height(12.dp))
+                    TransferCompleteMetrics(state)
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(downloadSummary, color = TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -629,6 +632,35 @@ private fun TransfersScreen(state: SonyEdgeUiState, onCancel: () -> Unit, onRetr
 }
 
 @Composable
+private fun TransferCompleteMetrics(state: SonyEdgeUiState) {
+    Surface(
+        color = SurfaceSoft,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TransferMetric(
+                label = "Total",
+                value = formatTransferBytes(state.downloadBatchBytesDone),
+                modifier = Modifier.weight(1f)
+            )
+            TransferMetric(
+                label = "Average",
+                value = transferSpeedText(state.downloadSpeedBps),
+                modifier = Modifier.weight(1f)
+            )
+            TransferMetric(
+                label = "Elapsed",
+                value = formatDuration(state.downloadElapsedSeconds),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun TransferMetrics(state: SonyEdgeUiState) {
     val fileProgress = if (state.downloadBytesTotal > 0) {
         state.downloadBytesDone.toFloat() / state.downloadBytesTotal.coerceAtLeast(1)
@@ -679,8 +711,8 @@ private fun TransferMetric(label: String, value: String, modifier: Modifier = Mo
         modifier = modifier
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text(label, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-            Text(value, color = TextMain, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, color = TextMuted, fontSize = 11.sp, maxLines = 1)
+            Text(value, color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
