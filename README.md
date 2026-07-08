@@ -1,5 +1,7 @@
 # SonyEdge
 
+[中文说明](README-ZH.md)
+
 Android prototype for connecting to a Sony A7R III camera Wi-Fi network and importing photos through the old Imaging Edge / PlayMemories-style Wi-Fi services.
 
 ## What it does
