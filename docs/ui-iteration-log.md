@@ -198,6 +198,38 @@
 - `build/device-screenshots/sonyedge-back-date-final-20260706.png`
 - `build/device-screenshots/sonyedge-selection-final-20260706.png`
 
+## 2026-07-08 Transfer Speed and ETA
+
+### Implemented in this iteration
+- Added per-file transfer telemetry from `DownloadService`: bytes done, bytes total, current speed, and estimated remaining seconds.
+- Added a live Imports metrics panel showing:
+  - Current transfer speed.
+  - Estimated remaining time.
+  - Current file byte progress.
+  - Per-file progress bar.
+- Kept high-frequency progress samples out of Recent activity so the activity list stays readable.
+- Bumped the Android build to `versionCode 13` and `versionName 0.1.12`.
+
+### Verification status
+- Build succeeded with `:app:assembleDebug`.
+- Installed to device `909e29e1` after uninstalling the old debug-signature-mismatched package.
+- Granted location, nearby devices, and notification permissions after reinstall.
+- Connected to the A7R III camera Wi-Fi.
+- Browsed `Camera / PhotoRoot / Date / 2026-7-8`.
+- Selected all 3 photos in the folder and started a real import.
+- Imports page displayed live metrics during transfer:
+  - Speed: `730 KB/s`.
+  - Remaining: `0:30`.
+  - Current file: `5.5 MB / 26.6 MB`.
+- Import completed successfully:
+  - `3 imported / 0 failed`.
+  - Saved to `DCIM/Sony Picture`.
+- Confirmed files in `/sdcard/DCIM/Sony Picture` after import.
+
+### Screenshot evidence
+- `build/device-screenshots/sonyedge-transfer-speed-eta-progress-20260708.png`
+- `build/device-screenshots/sonyedge-transfer-speed-eta-complete-20260708.png`
+
 ### Notes
 - The tested `DSC09918.JPG` and `DSC09919.JPG` appear to be landscape frames with portrait subjects, so they do not prove the vertical-photo orientation case by themselves.
 - The preview now prefers original JPEG bytes when available, which is the correct path for vertical photos whose EXIF orientation is only present on the original file.

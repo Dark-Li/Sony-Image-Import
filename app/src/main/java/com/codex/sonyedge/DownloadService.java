@@ -40,9 +40,14 @@ public class DownloadService extends Service {
     public static final String EXTRA_FAILED = "failed";
     public static final String EXTRA_FILENAME = "filename";
     public static final String EXTRA_ITEM_JSON = "item_json";
+    public static final String EXTRA_BYTES_DONE = "bytes_done";
+    public static final String EXTRA_BYTES_TOTAL = "bytes_total";
+    public static final String EXTRA_SPEED_BPS = "speed_bps";
+    public static final String EXTRA_ETA_SECONDS = "eta_seconds";
 
     public static final String STATE_STARTED = "started";
     public static final String STATE_FILE_STARTED = "file_started";
+    public static final String STATE_FILE_PROGRESS = "file_progress";
     public static final String STATE_FILE_DONE = "file_done";
     public static final String STATE_FILE_FAILED = "file_failed";
     public static final String STATE_DONE = "done";
@@ -114,7 +119,7 @@ public class DownloadService extends Service {
                 publishProgress(STATE_FILE_STARTED, prefix + "Downloading " + item.title, total, i + 1, success, failed, item.title, "");
                 updateNotification(prefix + item.title);
                 try {
-                    DownloadValidator.ValidationResult result = downloadOne(item, dir);
+                    DownloadValidator.ValidationResult result = downloadOne(item, dir, total, i + 1, success, failed);
                     success++;
                     publishProgress(STATE_FILE_DONE, prefix + item.title + " -> " + result.toDisplayString(), total, i + 1, success, failed, item.title, "");
                 } catch (Exception ex) {
@@ -131,7 +136,7 @@ public class DownloadService extends Service {
         }
     }
 
-    private DownloadValidator.ValidationResult downloadOne(CameraContentItem item, File dir) throws Exception {
+    private DownloadValidator.ValidationResult downloadOne(CameraContentItem item, File dir, int total, int index, int success, int failed) throws Exception {
         String urlText = item.bestDownloadUrl();
         if (urlText == null || urlText.isEmpty()) {
             throw new IllegalArgumentException("No download URL for " + item.title);
@@ -151,6 +156,7 @@ public class DownloadService extends Service {
         if (code < 200 || code >= 300) {
             throw new IllegalStateException("HTTP " + code + " for " + urlText);
         }
+        long contentLength = Math.max(0, connection.getContentLengthLong());
 
         String filename = safeFilename(item.title);
         if (!filename.contains(".")) {
@@ -160,11 +166,42 @@ public class DownloadService extends Service {
         try (InputStream input = connection.getInputStream(); FileOutputStream fileOutput = new FileOutputStream(output)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
+            long bytesDone = 0;
+            long lastBytes = 0;
+            long lastAt = System.currentTimeMillis();
             while ((read = input.read(buffer)) != -1) {
                 if (cancelled) {
                     throw new InterruptedException("Cancelled");
                 }
                 fileOutput.write(buffer, 0, read);
+                bytesDone += read;
+                long now = System.currentTimeMillis();
+                if (now - lastAt >= 500 || (contentLength > 0 && bytesDone >= contentLength)) {
+                    long elapsedMs = Math.max(1, now - lastAt);
+                    long bytesDelta = Math.max(0, bytesDone - lastBytes);
+                    long speedBps = bytesDelta * 1000L / elapsedMs;
+                    long etaSeconds = 0;
+                    if (contentLength > 0 && speedBps > 0) {
+                        long remainingBytes = Math.max(0, contentLength - bytesDone);
+                        etaSeconds = (long) Math.ceil(remainingBytes / (double) speedBps);
+                    }
+                    publishProgress(
+                            STATE_FILE_PROGRESS,
+                            String.format(Locale.US, "%d/%d Importing %s", index, total, item.title),
+                            total,
+                            index,
+                            success,
+                            failed,
+                            item.title,
+                            "",
+                            bytesDone,
+                            contentLength,
+                            speedBps,
+                            etaSeconds
+                    );
+                    lastAt = now;
+                    lastBytes = bytesDone;
+                }
             }
         }
         DownloadValidator.ValidationResult result = DownloadValidator.inspect(output, connection.getContentType());
@@ -396,6 +433,23 @@ public class DownloadService extends Service {
     }
 
     private void publishProgress(String state, String message, int total, int index, int success, int failed, String filename, String itemJson) {
+        publishProgress(state, message, total, index, success, failed, filename, itemJson, 0, 0, 0, 0);
+    }
+
+    private void publishProgress(
+            String state,
+            String message,
+            int total,
+            int index,
+            int success,
+            int failed,
+            String filename,
+            String itemJson,
+            long bytesDone,
+            long bytesTotal,
+            long speedBps,
+            long etaSeconds
+    ) {
         Intent intent = new Intent(ACTION_PROGRESS);
         intent.setPackage(getPackageName());
         intent.putExtra(EXTRA_MESSAGE, message);
@@ -406,6 +460,10 @@ public class DownloadService extends Service {
         intent.putExtra(EXTRA_FAILED, failed);
         intent.putExtra(EXTRA_FILENAME, filename);
         intent.putExtra(EXTRA_ITEM_JSON, itemJson);
+        intent.putExtra(EXTRA_BYTES_DONE, bytesDone);
+        intent.putExtra(EXTRA_BYTES_TOTAL, bytesTotal);
+        intent.putExtra(EXTRA_SPEED_BPS, speedBps);
+        intent.putExtra(EXTRA_ETA_SECONDS, etaSeconds);
         sendBroadcast(intent);
     }
 

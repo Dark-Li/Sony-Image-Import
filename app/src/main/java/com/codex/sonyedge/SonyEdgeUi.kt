@@ -517,6 +517,7 @@ private fun TransfersScreen(state: SonyEdgeUiState, onCancel: () -> Unit, onRetr
     val importing = state.downloadState in setOf(
         DownloadService.STATE_STARTED,
         DownloadService.STATE_FILE_STARTED,
+        DownloadService.STATE_FILE_PROGRESS,
         DownloadService.STATE_FILE_DONE,
         DownloadService.STATE_FILE_FAILED
     ) && state.downloadTotal > 0 && state.downloadProgress < state.downloadTotal
@@ -570,6 +571,10 @@ private fun TransfersScreen(state: SonyEdgeUiState, onCancel: () -> Unit, onRetr
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                if (importing) {
+                    Spacer(Modifier.height(12.dp))
+                    TransferMetrics(state)
+                }
                 Spacer(Modifier.height(10.dp))
                 Text(downloadSummary, color = TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (state.failedItems.isNotEmpty()) {
@@ -619,6 +624,63 @@ private fun TransfersScreen(state: SonyEdgeUiState, onCancel: () -> Unit, onRetr
                     Text(event, color = TextMuted, style = MaterialTheme.typography.bodySmall)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TransferMetrics(state: SonyEdgeUiState) {
+    val fileProgress = if (state.downloadBytesTotal > 0) {
+        state.downloadBytesDone.toFloat() / state.downloadBytesTotal.coerceAtLeast(1)
+    } else {
+        null
+    }
+    Surface(
+        color = SurfaceSoft,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                TransferMetric(
+                    label = "Speed",
+                    value = transferSpeedText(state.downloadSpeedBps),
+                    modifier = Modifier.weight(1f)
+                )
+                TransferMetric(
+                    label = "Remaining",
+                    value = transferEtaText(state.downloadEtaSeconds, state.downloadSpeedBps, state.downloadBytesTotal),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Current file", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    Text(currentFileBytesText(state), color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                }
+                if (fileProgress != null) {
+                    LinearProgressIndicator(
+                        progress = { fileProgress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransferMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft),
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(label, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            Text(value, color = TextMain, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -719,6 +781,47 @@ private fun userDownloadSummary(state: SonyEdgeUiState): String = when {
     state.downloadProgress < state.downloadTotal -> toImportTerms(state.downloadMessage.substringBefore(" Output:"))
     state.downloadFailed == 0 -> "Saved ${state.downloadSuccess} item${if (state.downloadSuccess == 1) "" else "s"} to DCIM/Sony Picture."
     else -> "Imported ${state.downloadSuccess}, failed ${state.downloadFailed}. Failed items can be retried."
+}
+
+private fun transferSpeedText(speedBps: Long): String =
+    if (speedBps > 0) "${formatTransferBytes(speedBps)}/s" else "Calculating"
+
+private fun transferEtaText(etaSeconds: Long, speedBps: Long, bytesTotal: Long): String =
+    when {
+        bytesTotal <= 0L -> "Unknown"
+        speedBps <= 0L -> "Calculating"
+        etaSeconds <= 0L -> "Almost done"
+        else -> formatDuration(etaSeconds)
+    }
+
+private fun currentFileBytesText(state: SonyEdgeUiState): String =
+    if (state.downloadBytesTotal > 0) {
+        "${formatTransferBytes(state.downloadBytesDone)} / ${formatTransferBytes(state.downloadBytesTotal)}"
+    } else if (state.downloadBytesDone > 0) {
+        "${formatTransferBytes(state.downloadBytesDone)} / unknown"
+    } else {
+        "Waiting"
+    }
+
+private fun formatTransferBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 KB"
+    val mb = bytes / (1024.0 * 1024.0)
+    if (mb >= 1.0) return String.format("%.1f MB", mb)
+    val kb = bytes / 1024.0
+    return if (kb >= 1.0) String.format("%.0f KB", kb) else "$bytes B"
+}
+
+private fun formatDuration(seconds: Long): String {
+    val safeSeconds = seconds.coerceAtLeast(0)
+    val minutes = safeSeconds / 60
+    val secs = safeSeconds % 60
+    return if (minutes >= 60) {
+        val hours = minutes / 60
+        val remainingMinutes = minutes % 60
+        String.format("%d:%02d:%02d", hours, remainingMinutes, secs)
+    } else {
+        String.format("%d:%02d", minutes, secs)
+    }
 }
 
 @Composable

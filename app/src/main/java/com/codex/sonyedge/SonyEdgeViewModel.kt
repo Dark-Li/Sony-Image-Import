@@ -64,6 +64,10 @@ data class SonyEdgeUiState(
     val downloadSuccess: Int = 0,
     val downloadFailed: Int = 0,
     val downloadState: String = "",
+    val downloadBytesDone: Long = 0,
+    val downloadBytesTotal: Long = 0,
+    val downloadSpeedBps: Long = 0,
+    val downloadEtaSeconds: Long = 0,
     val transferEvents: List<String> = emptyList(),
     val failedItems: List<CameraContentItem> = emptyList()
 ) {
@@ -341,6 +345,10 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 downloadSuccess = 0,
                 downloadFailed = 0,
                 downloadState = DownloadService.STATE_STARTED,
+                downloadBytesDone = 0,
+                downloadBytesTotal = 0,
+                downloadSpeedBps = 0,
+                downloadEtaSeconds = 0,
                 failedItems = emptyList(),
                 transferEvents = listOf("Queued ${items.size} imports.")
             )
@@ -355,6 +363,10 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val success = intent.getIntExtra(DownloadService.EXTRA_SUCCESS, 0).coerceAtLeast(0)
         val failed = intent.getIntExtra(DownloadService.EXTRA_FAILED, 0).coerceAtLeast(0)
         val failedJson = intent.getStringExtra(DownloadService.EXTRA_ITEM_JSON).orEmpty()
+        val bytesDone = intent.getLongExtra(DownloadService.EXTRA_BYTES_DONE, 0).coerceAtLeast(0)
+        val bytesTotal = intent.getLongExtra(DownloadService.EXTRA_BYTES_TOTAL, 0).coerceAtLeast(0)
+        val speedBps = intent.getLongExtra(DownloadService.EXTRA_SPEED_BPS, 0).coerceAtLeast(0)
+        val etaSeconds = intent.getLongExtra(DownloadService.EXTRA_ETA_SECONDS, 0).coerceAtLeast(0)
         _uiState.update { current ->
             val completed = (success + failed).coerceIn(0, total)
             val events = if (state in eventStates && message.isNotBlank()) {
@@ -375,6 +387,10 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 downloadSuccess = success,
                 downloadFailed = failed,
                 downloadState = state,
+                downloadBytesDone = bytesDone,
+                downloadBytesTotal = bytesTotal,
+                downloadSpeedBps = speedBps,
+                downloadEtaSeconds = etaSeconds,
                 transferEvents = events,
                 failedItems = failedItems
             )
