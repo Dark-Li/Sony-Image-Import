@@ -17,7 +17,9 @@ git pull origin develop
 git checkout -b feature/<short-name>
 ```
 
-After implementation and local verification:
+After implementation and local verification, keep the feature branch local unless the user explicitly asks to push it.
+
+Only when the user asks to merge the feature into `develop`:
 
 ```powershell
 git checkout develop
@@ -25,7 +27,7 @@ git merge feature/<short-name>
 git push origin develop
 ```
 
-After phone testing confirms camera connection, browsing, preview, and download still work:
+Only when the user asks to promote the tested `develop` build to `master`:
 
 ```powershell
 git checkout master
@@ -37,3 +39,4 @@ git push origin master
 
 New app functionality and UI experiments should not be developed directly on `master`.
 Use `develop` and feature branches first, then promote only verified builds to `master`.
+Do not push feature branches by default. Push only `develop` and `master`, and only after the user explicitly requests that promotion step.
