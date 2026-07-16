@@ -3,8 +3,8 @@
   "fileKey": "qvqszCja2Chzf27h1Bx2qS",
   "fileUrl": "https://www.figma.com/design/qvqszCja2Chzf27h1Bx2qS",
   "branch": "feature/figma-ui-redesign",
-  "phase": "phase1-complete",
-  "step": "foundations-validated",
+  "phase": "phase2-pending",
+  "step": "mcp-quota-blocked-before-page-validation",
   "entities": {
     "collections": {
       "primitives": "VariableCollectionId:3:2",
@@ -56,7 +56,11 @@
     "effectStyleCount": 3,
     "status": "PASS"
   },
-  "pendingValidations": [],
+  "pendingValidations": [
+    "Inspect the Figma page list after MCP access is restored",
+    "Confirm whether the Phase 2 page-structure mutation landed",
+    "Validate Cover, Getting Started, and Foundations with screenshots"
+  ],
   "completedSteps": [
     "phase0",
     "phase1"
