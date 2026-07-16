@@ -1,0 +1,64 @@
+{
+  "runId": "sonyedge-ui-20260716",
+  "fileKey": "qvqszCja2Chzf27h1Bx2qS",
+  "fileUrl": "https://www.figma.com/design/qvqszCja2Chzf27h1Bx2qS",
+  "branch": "feature/figma-ui-redesign",
+  "phase": "phase1-complete",
+  "step": "foundations-validated",
+  "entities": {
+    "collections": {
+      "primitives": "VariableCollectionId:3:2",
+      "color": "VariableCollectionId:3:3",
+      "dimensions": "VariableCollectionId:3:4",
+      "motion": "VariableCollectionId:3:5"
+    },
+    "collectionVariableCounts": {
+      "primitives": 19,
+      "color": 26,
+      "dimensions": 21,
+      "motion": 8
+    },
+    "textStyles": {
+      "displayLarge": "S:63e8ec1a66f0796ad49e105fcb5298925191b2d1,",
+      "titleLarge": "S:8db3aef6ba4ae6db31dcf7d5342cd97cbf92dbe5,",
+      "titleMedium": "S:885534acbca18ed528e8e8d5ce4fd5ec4d2252bf,",
+      "titleSmall": "S:30c67df1ef4aa86e50a26124eee3d31ea8d9ccbe,",
+      "bodyLarge": "S:5ef99212138a2a68bee485537f1706a9805f9247,",
+      "bodyMedium": "S:fac6a28a462547f847395f097e65f49ae8726357,",
+      "bodySmall": "S:05b54dc782aeb80b422f3b1f76ea24fd857d99de,",
+      "labelLarge": "S:c0d682042a48d8a6ca70f3b195d67c31e28e8bf2,",
+      "labelMedium": "S:6f4049d18a99e867736bc8e0d9e3615604c444fe,",
+      "labelSmall": "S:6277e131a503b1a24c9763719ac4ac2f07b6cdaa,"
+    },
+    "effectStyles": {
+      "low": "S:7f736c049e61adb7420119218d5599a9eec42a9c,",
+      "medium": "S:0adcbe2465c2f68b6366f4066ca355a9958a2065,",
+      "overlay": "S:adfee1607b87b27483eea0235b53c44e14d3a414,"
+    },
+    "pages": {},
+    "components": {},
+    "screens": {}
+  },
+  "idempotency": {
+    "namespace": "dsb",
+    "runIdKey": "run_id",
+    "phaseKey": "phase",
+    "logicalKey": "key"
+  },
+  "validation": {
+    "collectionCount": 4,
+    "variableCount": 74,
+    "aliasCount": 26,
+    "brokenAliasCount": 0,
+    "allScopesCount": 0,
+    "missingAndroidSyntaxCount": 0,
+    "textStyleCount": 10,
+    "effectStyleCount": 3,
+    "status": "PASS"
+  },
+  "pendingValidations": [],
+  "completedSteps": [
+    "phase0",
+    "phase1"
+  ]
+}
