@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1600" viewBox="0 0 1440 1600">
+  <title>SonyEdge implementation utilities</title>
+  <desc>Responsive, motion, media, cache and accessibility guidance for the Android implementation.</desc>
+  <style>
+    text { font-family: Roboto, Arial, sans-serif; letter-spacing: 0; }
+    .eyebrow { font-size: 12px; font-weight: 700; }
+    .h1 { font-size: 42px; font-weight: 700; }
+    .h2 { font-size: 24px; font-weight: 700; }
+    .h3 { font-size: 17px; font-weight: 600; }
+    .body { font-size: 14px; font-weight: 400; }
+    .small { font-size: 12px; font-weight: 400; }
+    .label { font-size: 12px; font-weight: 600; }
+  </style>
+  <rect width="1440" height="1600" fill="#F6F7FB"/>
+  <g transform="translate(80 64)">
+    <text x="0" y="0" class="eyebrow" fill="#1E4ED8">SONYEDGE IMPLEMENTATION GUIDE</text>
+    <text x="0" y="58" class="h1" fill="#141821">Utilities</text>
+    <text x="0" y="94" class="body" fill="#667085">Rules that keep the Figma intent intact across real Android devices and camera media.</text>
+    <rect x="1080" y="0" width="200" height="40" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <text x="1104" y="26" class="label" fill="#141821">RESPONSIVE &#183; MOTION</text>
+  </g>
+
+  <g transform="translate(80 200)">
+    <text x="0" y="0" class="h2" fill="#141821">Responsive layout contract</text>
+    <text x="0" y="30" class="body" fill="#667085">Use available width and window size classes. Never encode a screen-specific pixel width.</text>
+    <g transform="translate(0 62)">
+      <rect x="0" y="0" width="300" height="242" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="24" y="24" width="252" height="34" rx="8" fill="#1E4ED8"/>
+      <text x="40" y="46" class="label" fill="#FFFFFF">COMPACT / 320-359 DP</text>
+      <text x="24" y="92" class="h3" fill="#141821">Two-column media grid</text>
+      <text x="24" y="122" class="body" fill="#667085">16 dp page padding</text>
+      <text x="24" y="146" class="body" fill="#667085">8 dp grid gap</text>
+      <text x="24" y="170" class="body" fill="#667085">Icon-first selection actions</text>
+      <text x="24" y="204" class="small" fill="#D94A4A">No button label may wrap twice.</text>
+
+      <rect x="326" y="0" width="300" height="242" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="350" y="24" width="252" height="34" rx="8" fill="#1738A6"/>
+      <text x="366" y="46" class="label" fill="#FFFFFF">MEDIUM / 360-599 DP</text>
+      <text x="350" y="92" class="h3" fill="#141821">Two or three columns</text>
+      <text x="350" y="122" class="body" fill="#667085">16-20 dp page padding</text>
+      <text x="350" y="146" class="body" fill="#667085">8-12 dp grid gap</text>
+      <text x="350" y="170" class="body" fill="#667085">Bottom navigation stays visible</text>
+      <text x="350" y="204" class="small" fill="#0F9D76">Primary phone target.</text>
+
+      <rect x="652" y="0" width="300" height="242" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="676" y="24" width="252" height="34" rx="8" fill="#141821"/>
+      <text x="692" y="46" class="label" fill="#FFFFFF">EXPANDED / 600+ DP</text>
+      <text x="676" y="92" class="h3" fill="#141821">Three to five columns</text>
+      <text x="676" y="122" class="body" fill="#667085">24 dp page padding</text>
+      <text x="676" y="146" class="body" fill="#667085">Navigation rail when useful</text>
+      <text x="676" y="170" class="body" fill="#667085">Preview may use a side panel</text>
+      <text x="676" y="204" class="small" fill="#0F9D76">Do not simply stretch compact UI.</text>
+
+      <rect x="978" y="0" width="302" height="242" rx="8" fill="#141821"/>
+      <text x="1002" y="40" class="label" fill="#667085">SYSTEM INSETS</text>
+      <path d="M1010 72h238v126h-238z" fill="#0B0E14" stroke="#667085"/>
+      <rect x="1024" y="88" width="210" height="86" rx="8" fill="#FFFFFF"/>
+      <rect x="1024" y="88" width="210" height="16" fill="#1E4ED8"/>
+      <rect x="1024" y="158" width="210" height="16" fill="#1E4ED8"/>
+      <text x="1040" y="136" class="small" fill="#141821">Safe content area</text>
+      <text x="1002" y="224" class="small" fill="#D8DDE8">Status, cutout and gesture bars included.</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 566)">
+    <text x="0" y="0" class="h2" fill="#141821">Motion system</text>
+    <text x="0" y="30" class="body" fill="#667085">Movement explains state change. It never delays access to camera content.</text>
+    <rect x="0" y="62" width="1280" height="290" rx="8" fill="#0B0E14"/>
+    <g transform="translate(24 92)">
+      <text x="0" y="0" class="label" fill="#667085">DURATION TOKENS</text>
+      <g transform="translate(0 26)">
+        <rect x="0" y="0" width="116" height="54" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="22" y="24" class="h3" fill="#FFFFFF">100 ms</text>
+        <text x="22" y="43" class="small" fill="#667085">Pressed</text>
+        <rect x="132" y="0" width="116" height="54" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="154" y="24" class="h3" fill="#FFFFFF">180 ms</text>
+        <text x="154" y="43" class="small" fill="#667085">Selection</text>
+        <rect x="264" y="0" width="116" height="54" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="286" y="24" class="h3" fill="#FFFFFF">220 ms</text>
+        <text x="286" y="43" class="small" fill="#667085">Content</text>
+        <rect x="396" y="0" width="116" height="54" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="418" y="24" class="h3" fill="#FFFFFF">240 ms</text>
+        <text x="418" y="43" class="small" fill="#667085">Page</text>
+        <rect x="528" y="0" width="116" height="54" rx="8" fill="#1E4ED8"/>
+        <text x="550" y="24" class="h3" fill="#FFFFFF">300 ms</text>
+        <text x="550" y="43" class="small" fill="#D8DDE8">Preview</text>
+      </g>
+      <text x="0" y="122" class="label" fill="#667085">COMPOSE SPECS</text>
+      <text x="0" y="150" class="body" fill="#FFFFFF">Standard: FastOutSlowInEasing &#183; Emphasized: CubicBezier(0.2, 0, 0, 1)</text>
+      <text x="0" y="178" class="body" fill="#FFFFFF">Double tap: animate 1x to 2.5x &#183; Pinch: direct 1x to 5x &#183; Pager disabled while zoomed</text>
+      <text x="0" y="206" class="body" fill="#FFFFFF">Preview image swaps with a 180 ms crossfade while the previous frame remains visible.</text>
+      <rect x="888" y="0" width="344" height="214" rx="8" fill="#141821" stroke="#667085"/>
+      <text x="912" y="34" class="label" fill="#667085">REDUCED MOTION</text>
+      <text x="912" y="68" class="h3" fill="#FFFFFF">Preserve function, reduce travel</text>
+      <text x="912" y="100" class="body" fill="#D8DDE8">Replace shared-axis movement with fades.</text>
+      <text x="912" y="126" class="body" fill="#D8DDE8">Keep selection and progress state explicit.</text>
+      <text x="912" y="166" class="small" fill="#0F9D76">No workflow depends on animation completion.</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 980)">
+    <text x="0" y="0" class="h2" fill="#141821">Media correctness and loading</text>
+    <text x="0" y="30" class="body" fill="#667085">The preview must represent the selected original, remain stable during scrolling and respect EXIF orientation.</text>
+    <g transform="translate(0 62)">
+      <rect x="0" y="0" width="410" height="286" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="24" y="36" class="label" fill="#1E4ED8">ORIENTATION</text>
+      <rect x="24" y="58" width="120" height="184" rx="8" fill="#0B0E14"/>
+      <rect x="42" y="78" width="84" height="144" rx="8" fill="#1738A6"/>
+      <path d="M42 202l28-44 20 22 18-32 18 54z" fill="#0F9D76"/>
+      <text x="172" y="88" class="h3" fill="#141821">Read EXIF before display</text>
+      <text x="172" y="120" class="body" fill="#667085">JPEG and embedded RAW previews</text>
+      <text x="172" y="146" class="body" fill="#667085">must rotate before fit calculation.</text>
+      <text x="172" y="190" class="small" fill="#0F9D76">Portrait stays portrait.</text>
+
+      <rect x="434" y="0" width="410" height="286" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="458" y="36" class="label" fill="#1E4ED8">CACHE</text>
+      <text x="458" y="78" class="h3" fill="#141821">Memory first, disk second</text>
+      <text x="458" y="112" class="body" fill="#667085">128 MiB memory cache</text>
+      <text x="458" y="140" class="body" fill="#667085">512 MiB disk cap</text>
+      <text x="458" y="168" class="body" fill="#667085">7-day disk TTL</text>
+      <rect x="458" y="198" width="332" height="12" rx="6" fill="#D8DDE8"/>
+      <rect x="458" y="198" width="216" height="12" rx="6" fill="#1E4ED8"/>
+      <text x="458" y="242" class="small" fill="#667085">Stable content IDs prevent recycled-cell mismatch.</text>
+
+      <rect x="868" y="0" width="412" height="286" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="892" y="36" class="label" fill="#1E4ED8">PROGRESSIVE LOAD</text>
+      <rect x="892" y="58" width="96" height="96" rx="8" fill="#D8DDE8"/>
+      <path d="M892 142l26-32 20 18 20-26 30 52h-96z" fill="#667085"/>
+      <path d="M1008 86h224" stroke="#D8DDE8" stroke-width="10" stroke-linecap="round"/>
+      <path d="M1008 116h170" stroke="#D8DDE8" stroke-width="10" stroke-linecap="round"/>
+      <text x="892" y="190" class="body" fill="#141821">Placeholder keeps card dimensions.</text>
+      <text x="892" y="218" class="body" fill="#667085">Thumbnail crossfades without a white flash.</text>
+      <text x="892" y="246" class="small" fill="#0F9D76">Returning to a row reuses its cached bitmap.</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 1390)">
+    <text x="0" y="0" class="h2" fill="#141821">Accessibility release gate</text>
+    <rect x="0" y="34" width="1280" height="126" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <circle cx="42" cy="76" r="14" fill="#0F9D76"/>
+    <path d="M35 76l5 5 10-12" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+    <text x="72" y="70" class="h3" fill="#141821">48 dp touch targets &#183; icon and text status &#183; 1.5x font scale &#183; TalkBack labels</text>
+    <text x="72" y="102" class="body" fill="#667085">Long camera paths and file names ellipsize visually but remain available to accessibility services and details.</text>
+    <text x="72" y="132" class="body" fill="#667085">Bottom bars include navigation insets and never cover the final media row.</text>
+    <rect x="1086" y="60" width="162" height="54" rx="8" fill="#1E4ED8"/>
+    <text x="1124" y="92" class="label" fill="#FFFFFF">RELEASE GATE</text>
+  </g>
+</svg>

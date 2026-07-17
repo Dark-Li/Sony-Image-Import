@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1900" viewBox="0 0 1440 1900">
+  <title>SonyEdge foundations</title>
+  <desc>Color, typography, spacing, radius, elevation and motion foundations for SonyEdge.</desc>
+  <style>
+    text { font-family: Roboto, Arial, sans-serif; letter-spacing: 0; }
+    .h1 { font-size: 42px; font-weight: 700; }
+    .h2 { font-size: 24px; font-weight: 700; }
+    .h3 { font-size: 18px; font-weight: 600; }
+    .body { font-size: 15px; font-weight: 400; }
+    .small { font-size: 12px; font-weight: 400; }
+    .label { font-size: 12px; font-weight: 600; }
+    .mono { font-family: Arial, sans-serif; font-size: 12px; font-weight: 400; }
+  </style>
+  <rect width="1440" height="1900" fill="#F6F7FB"/>
+
+  <g transform="translate(80 64)">
+    <text x="0" y="0" class="label" fill="#1E4ED8">SONYEDGE DESIGN SYSTEM</text>
+    <text x="0" y="58" class="h1" fill="#141821">Foundations</text>
+    <text x="0" y="94" class="body" fill="#667085">Token decisions that keep camera browsing calm, readable and consistent.</text>
+    <rect x="1102" y="4" width="178" height="38" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <text x="1122" y="28" class="label" fill="#141821">COMPOSE · LIGHT</text>
+  </g>
+
+  <g transform="translate(80 198)">
+    <text x="0" y="0" class="h2" fill="#141821">Color</text>
+    <text x="0" y="30" class="body" fill="#667085">Semantic color is restrained: blue directs action; status colors communicate outcomes.</text>
+    <rect x="0" y="58" width="1280" height="294" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+
+    <g transform="translate(24 86)">
+      <text x="0" y="0" class="label" fill="#667085">CORE</text>
+      <g transform="translate(0 20)">
+        <rect x="0" y="0" width="138" height="88" rx="8" fill="#1E4ED8"/>
+        <text x="12" y="58" class="label" fill="#FFFFFF">Sony Blue</text><text x="12" y="76" class="small" fill="#FFFFFF">#1E4ED8</text>
+        <rect x="150" y="0" width="138" height="88" rx="8" fill="#1738A6"/>
+        <text x="162" y="58" class="label" fill="#FFFFFF">Blue Dark</text><text x="162" y="76" class="small" fill="#FFFFFF">#1738A6</text>
+        <rect x="300" y="0" width="138" height="88" rx="8" fill="#141821"/>
+        <text x="312" y="58" class="label" fill="#FFFFFF">Ink</text><text x="312" y="76" class="small" fill="#D8DDE8">#141821</text>
+        <rect x="450" y="0" width="138" height="88" rx="8" fill="#667085"/>
+        <text x="462" y="58" class="label" fill="#FFFFFF">Muted</text><text x="462" y="76" class="small" fill="#FFFFFF">#667085</text>
+        <rect x="600" y="0" width="138" height="88" rx="8" fill="#D8DDE8"/>
+        <text x="612" y="58" class="label" fill="#141821">Outline</text><text x="612" y="76" class="small" fill="#141821">#D8DDE8</text>
+        <rect x="750" y="0" width="138" height="88" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+        <text x="762" y="58" class="label" fill="#141821">Canvas</text><text x="762" y="76" class="small" fill="#667085">#F6F7FB</text>
+        <rect x="900" y="0" width="138" height="88" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+        <text x="912" y="58" class="label" fill="#141821">Surface</text><text x="912" y="76" class="small" fill="#667085">#FFFFFF</text>
+        <rect x="1050" y="0" width="138" height="88" rx="8" fill="#0B0E14"/>
+        <text x="1062" y="58" class="label" fill="#FFFFFF">Preview</text><text x="1062" y="76" class="small" fill="#D8DDE8">#0B0E14</text>
+      </g>
+
+      <text x="0" y="145" class="label" fill="#667085">STATUS &amp; SEMANTIC USE</text>
+      <g transform="translate(0 164)">
+        <rect x="0" y="0" width="288" height="66" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+        <circle cx="28" cy="33" r="10" fill="#0F9D76"/>
+        <text x="50" y="28" class="label" fill="#141821">Connected / Complete</text><text x="50" y="47" class="small" fill="#667085">#0F9D76 · status/success</text>
+        <rect x="300" y="0" width="288" height="66" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+        <circle cx="328" cy="33" r="10" fill="#E99A22"/>
+        <text x="350" y="28" class="label" fill="#141821">Attention / RAW</text><text x="350" y="47" class="small" fill="#667085">#E99A22 · status/warning</text>
+        <rect x="600" y="0" width="288" height="66" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+        <circle cx="628" cy="33" r="10" fill="#D94A4A"/>
+        <text x="650" y="28" class="label" fill="#141821">Failed / Offline</text><text x="650" y="47" class="small" fill="#667085">#D94A4A · status/error</text>
+        <rect x="900" y="0" width="288" height="66" rx="8" fill="#1E4ED8"/>
+        <text x="924" y="28" class="label" fill="#FFFFFF">Primary action</text><text x="924" y="47" class="small" fill="#FFFFFF">color/primary → ColorScheme.primary</text>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(80 592)">
+    <text x="0" y="0" class="h2" fill="#141821">Typography</text>
+    <text x="0" y="30" class="body" fill="#667085">Roboto, zero letter spacing. File names and diagnostics wrap or ellipsize by context.</text>
+    <rect x="0" y="58" width="1280" height="548" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <line x1="640" y1="82" x2="640" y2="582" stroke="#D8DDE8"/>
+
+    <g transform="translate(24 94)">
+      <text x="0" y="38" font-size="32" font-weight="700" fill="#141821">Camera originals</text>
+      <text x="420" y="22" class="label" fill="#1E4ED8">DISPLAY / LARGE</text><text x="420" y="43" class="small" fill="#667085">32sp · 40sp · Bold</text>
+      <line x1="0" y1="62" x2="592" y2="62" stroke="#D8DDE8"/>
+
+      <text x="0" y="110" font-size="24" font-weight="700" fill="#141821">July 16</text>
+      <text x="420" y="94" class="label" fill="#1E4ED8">TITLE / LARGE</text><text x="420" y="115" class="small" fill="#667085">24sp · 32sp · Bold</text>
+      <line x1="0" y1="134" x2="592" y2="134" stroke="#D8DDE8"/>
+
+      <text x="0" y="180" font-size="20" font-weight="600" fill="#141821">126 photos</text>
+      <text x="420" y="166" class="label" fill="#1E4ED8">TITLE / MEDIUM</text><text x="420" y="187" class="small" fill="#667085">20sp · 28sp · SemiBold</text>
+      <line x1="0" y1="206" x2="592" y2="206" stroke="#D8DDE8"/>
+
+      <text x="0" y="252" font-size="17" font-weight="600" fill="#141821">DSC06127.JPG</text>
+      <text x="420" y="238" class="label" fill="#1E4ED8">TITLE / SMALL</text><text x="420" y="259" class="small" fill="#667085">17sp · 24sp · SemiBold</text>
+      <line x1="0" y1="278" x2="592" y2="278" stroke="#D8DDE8"/>
+
+      <text x="0" y="326" font-size="16" font-weight="400" fill="#141821">Import originals to Sony Picture</text>
+      <text x="420" y="310" class="label" fill="#1E4ED8">BODY / LARGE</text><text x="420" y="331" class="small" fill="#667085">16sp · 24sp · Regular</text>
+      <line x1="0" y1="350" x2="592" y2="350" stroke="#D8DDE8"/>
+    </g>
+
+    <g transform="translate(664 94)">
+      <text x="0" y="35" font-size="14" font-weight="400" fill="#141821">Connected to ILCE-7RM3</text>
+      <text x="400" y="22" class="label" fill="#1E4ED8">BODY / MEDIUM</text><text x="400" y="43" class="small" fill="#667085">14sp · 20sp · Regular</text>
+      <line x1="0" y1="62" x2="592" y2="62" stroke="#D8DDE8"/>
+
+      <text x="0" y="107" font-size="12" font-weight="400" fill="#141821">Original · 12.5 MB · 7952 × 5304</text>
+      <text x="400" y="94" class="label" fill="#1E4ED8">BODY / SMALL</text><text x="400" y="115" class="small" fill="#667085">12sp · 16sp · Regular</text>
+      <line x1="0" y1="134" x2="592" y2="134" stroke="#D8DDE8"/>
+
+      <text x="0" y="179" font-size="14" font-weight="500" fill="#141821">Import selected</text>
+      <text x="400" y="166" class="label" fill="#1E4ED8">LABEL / LARGE</text><text x="400" y="187" class="small" fill="#667085">14sp · 20sp · Medium</text>
+      <line x1="0" y1="206" x2="592" y2="206" stroke="#D8DDE8"/>
+
+      <text x="0" y="251" font-size="12" font-weight="500" fill="#141821">CAMERA READY</text>
+      <text x="400" y="238" class="label" fill="#1E4ED8">LABEL / MEDIUM</text><text x="400" y="259" class="small" fill="#667085">12sp · 16sp · Medium</text>
+      <line x1="0" y1="278" x2="592" y2="278" stroke="#D8DDE8"/>
+
+      <text x="0" y="323" font-size="11" font-weight="500" fill="#141821">JPEG + RAW</text>
+      <text x="400" y="310" class="label" fill="#1E4ED8">LABEL / SMALL</text><text x="400" y="331" class="small" fill="#667085">11sp · 16sp · Medium</text>
+      <line x1="0" y1="350" x2="592" y2="350" stroke="#D8DDE8"/>
+    </g>
+
+    <g transform="translate(24 470)">
+      <rect x="0" y="0" width="1232" height="88" rx="8" fill="#F6F7FB"/>
+      <text x="20" y="27" class="label" fill="#667085">LONG CONTENT RULE</text>
+      <text x="20" y="54" class="body" fill="#141821">03_01_0661153656_000033_000000_000000 / DSC06127.ARW</text>
+      <text x="782" y="27" class="label" fill="#667085">COMPOSE MAPPING</text>
+      <text x="782" y="54" class="body" fill="#141821">MaterialTheme.typography · maxLines · ellipsis</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 1240)">
+    <text x="0" y="0" class="h2" fill="#141821">Spacing &amp; dimensions</text>
+    <text x="0" y="30" class="body" fill="#667085">An 8dp rhythm, with stable touch and navigation dimensions.</text>
+    <rect x="0" y="58" width="760" height="250" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <g transform="translate(24 92)">
+      <text x="0" y="0" class="label" fill="#667085">SPACE SCALE</text>
+      <g transform="translate(0 24)">
+        <rect x="0" y="0" width="4" height="20" fill="#1E4ED8"/><text x="0" y="42" class="small" fill="#667085">4</text>
+        <rect x="62" y="0" width="8" height="20" fill="#1E4ED8"/><text x="62" y="42" class="small" fill="#667085">8</text>
+        <rect x="124" y="0" width="12" height="20" fill="#1E4ED8"/><text x="124" y="42" class="small" fill="#667085">12</text>
+        <rect x="190" y="0" width="16" height="20" fill="#1E4ED8"/><text x="190" y="42" class="small" fill="#667085">16</text>
+        <rect x="260" y="0" width="24" height="20" fill="#1E4ED8"/><text x="260" y="42" class="small" fill="#667085">24</text>
+        <rect x="338" y="0" width="32" height="20" fill="#1E4ED8"/><text x="338" y="42" class="small" fill="#667085">32</text>
+        <rect x="424" y="0" width="40" height="20" fill="#1E4ED8"/><text x="424" y="42" class="small" fill="#667085">40</text>
+        <rect x="518" y="0" width="48" height="20" fill="#1E4ED8"/><text x="518" y="42" class="small" fill="#667085">48</text>
+        <rect x="616" y="0" width="64" height="20" fill="#1E4ED8"/><text x="616" y="42" class="small" fill="#667085">64</text>
+      </g>
+      <line x1="0" y1="92" x2="712" y2="92" stroke="#D8DDE8"/>
+      <rect x="0" y="116" width="156" height="68" rx="8" fill="#F6F7FB"/>
+      <text x="16" y="143" class="label" fill="#141821">48 dp</text><text x="16" y="164" class="small" fill="#667085">minimum touch</text>
+      <rect x="172" y="116" width="156" height="68" rx="8" fill="#F6F7FB"/>
+      <text x="188" y="143" class="label" fill="#141821">80 dp</text><text x="188" y="164" class="small" fill="#667085">bottom nav</text>
+      <rect x="344" y="116" width="156" height="68" rx="8" fill="#F6F7FB"/>
+      <text x="360" y="143" class="label" fill="#141821">3:2</text><text x="360" y="164" class="small" fill="#667085">photo ratio</text>
+      <rect x="516" y="116" width="196" height="68" rx="8" fill="#141821"/>
+      <text x="532" y="143" class="label" fill="#FFFFFF">WindowInsets</text><text x="532" y="164" class="small" fill="#D8DDE8">safe system edges</text>
+    </g>
+
+    <rect x="784" y="58" width="496" height="250" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <g transform="translate(808 92)">
+      <text x="0" y="0" class="label" fill="#667085">RADIUS &amp; ELEVATION</text>
+      <rect x="0" y="26" width="92" height="64" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <text x="0" y="111" class="small" fill="#667085">0 · flat</text>
+      <rect x="112" y="26" width="92" height="64" rx="4" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <text x="112" y="111" class="small" fill="#667085">4 · control</text>
+      <rect x="224" y="26" width="92" height="64" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <text x="224" y="111" class="small" fill="#667085">8 · card</text>
+      <rect x="336" y="26" width="112" height="64" rx="8" fill="#1E4ED8"/>
+      <text x="352" y="64" class="label" fill="#FFFFFF">8 · CTA</text>
+      <text x="336" y="111" class="small" fill="#667085">max radius</text>
+
+      <rect x="0" y="140" width="136" height="56" rx="8" fill="#D8DDE8" opacity="0.45"/>
+      <rect x="0" y="136" width="136" height="56" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="16" y="169" class="label" fill="#141821">Low</text>
+      <rect x="156" y="144" width="136" height="56" rx="8" fill="#667085" opacity="0.22"/>
+      <rect x="156" y="136" width="136" height="56" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="172" y="169" class="label" fill="#141821">Medium</text>
+      <rect x="312" y="148" width="136" height="56" rx="8" fill="#0B0E14" opacity="0.22"/>
+      <rect x="312" y="136" width="136" height="56" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="328" y="169" class="label" fill="#141821">Overlay</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 1590)">
+    <text x="0" y="0" class="h2" fill="#141821">Motion</text>
+    <text x="0" y="30" class="body" fill="#667085">Motion supports continuity; it never hides progress or blocks reduced-motion users.</text>
+    <rect x="0" y="58" width="1280" height="250" rx="8" fill="#0B0E14"/>
+    <g transform="translate(28 88)">
+      <text x="0" y="0" class="label" fill="#667085">DURATION TOKENS</text>
+      <g transform="translate(0 22)">
+        <rect x="0" y="0" width="100" height="8" rx="4" fill="#1E4ED8"/><text x="0" y="32" class="small" fill="#D8DDE8">100 ms · press</text>
+        <rect x="160" y="0" width="180" height="8" rx="4" fill="#1E4ED8"/><text x="160" y="32" class="small" fill="#D8DDE8">180 ms · select</text>
+        <rect x="400" y="0" width="220" height="8" rx="4" fill="#1E4ED8"/><text x="400" y="32" class="small" fill="#D8DDE8">220 ms · page</text>
+        <rect x="680" y="0" width="240" height="8" rx="4" fill="#1E4ED8"/><text x="680" y="32" class="small" fill="#D8DDE8">240 ms · preview</text>
+        <rect x="980" y="0" width="244" height="8" rx="4" fill="#1738A6"/><text x="980" y="32" class="small" fill="#D8DDE8">300 ms · emphasized</text>
+      </g>
+      <line x1="0" y1="76" x2="1224" y2="76" stroke="#667085" opacity="0.5"/>
+      <g transform="translate(0 96)">
+        <rect x="0" y="0" width="370" height="88" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="18" y="28" class="label" fill="#FFFFFF">STANDARD</text>
+        <text x="18" y="52" class="small" fill="#D8DDE8">FastOutSlowInEasing · navigation, selection</text>
+        <text x="18" y="72" class="small" fill="#667085">tween(durationMillis = token)</text>
+        <rect x="392" y="0" width="392" height="88" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="410" y="28" class="label" fill="#FFFFFF">EMPHASIZED</text>
+        <text x="410" y="52" class="small" fill="#D8DDE8">CubicBezierEasing · preview enter / exit</text>
+        <text x="410" y="72" class="small" fill="#667085">keep previous image frame during crossfade</text>
+        <rect x="806" y="0" width="418" height="88" rx="8" fill="#141821" stroke="#667085"/>
+        <text x="824" y="28" class="label" fill="#FFFFFF">SPRING</text>
+        <text x="824" y="52" class="small" fill="#D8DDE8">SpringSpec · double-tap zoom and return</text>
+        <text x="824" y="72" class="small" fill="#667085">disabled when system animation scale is reduced</text>
+      </g>
+    </g>
+  </g>
+</svg>

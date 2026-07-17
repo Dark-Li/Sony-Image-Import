@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <title>SonyEdge design system cover</title>
+  <desc>Cover for the SonyEdge Android camera Wi-Fi original image import experience.</desc>
+  <style>
+    text { font-family: Roboto, Arial, sans-serif; letter-spacing: 0; }
+    .display { font-size: 76px; font-weight: 700; }
+    .title { font-size: 28px; font-weight: 600; }
+    .body { font-size: 18px; font-weight: 400; }
+    .label { font-size: 14px; font-weight: 500; }
+  </style>
+  <rect width="1440" height="900" fill="#0B0E14"/>
+  <rect x="64" y="52" width="1312" height="796" rx="8" fill="#141821" stroke="#667085" stroke-opacity="0.45"/>
+
+  <g transform="translate(112 98)">
+    <rect x="0" y="0" width="44" height="44" rx="8" fill="#1E4ED8"/>
+    <path d="M12 16h8l3-4h8l3 4h3v17H12z" fill="#FFFFFF"/>
+    <circle cx="25" cy="24.5" r="5.5" fill="#1E4ED8" stroke="#FFFFFF" stroke-width="2.5"/>
+    <text x="60" y="31" class="title" fill="#FFFFFF">SonyEdge</text>
+    <rect x="1110" y="3" width="122" height="38" rx="8" fill="#141821" stroke="#667085"/>
+    <text x="1131" y="28" class="label" fill="#D8DDE8">ANDROID UI</text>
+  </g>
+
+  <g transform="translate(112 238)">
+    <text x="0" y="0" class="label" fill="#1E4ED8">DESIGN SYSTEM · PHASE 2</text>
+    <text x="0" y="92" class="display" fill="#FFFFFF">Camera originals.</text>
+    <text x="0" y="176" class="display" fill="#FFFFFF">Straight to your phone.</text>
+    <text x="0" y="232" class="body" fill="#D8DDE8">A responsive Android experience for browsing and importing</text>
+    <text x="0" y="260" class="body" fill="#D8DDE8">full-resolution photos over legacy Sony camera Wi-Fi.</text>
+
+    <g transform="translate(0 322)">
+      <rect x="0" y="0" width="150" height="44" rx="8" fill="#1E4ED8"/>
+      <circle cx="24" cy="22" r="5" fill="#0F9D76" stroke="#FFFFFF" stroke-width="2"/>
+      <text x="40" y="28" class="label" fill="#FFFFFF">Camera ready</text>
+      <rect x="164" y="0" width="134" height="44" rx="8" fill="#141821" stroke="#667085"/>
+      <path d="M184 14h17l4 4h14v14h-35z" fill="none" stroke="#D8DDE8" stroke-width="2"/>
+      <text x="224" y="28" class="label" fill="#D8DDE8">Browse</text>
+      <rect x="312" y="0" width="142" height="44" rx="8" fill="#141821" stroke="#667085"/>
+      <path d="M332 12v14m-6-6 6 6 6-6m-12 11h12" fill="none" stroke="#D8DDE8" stroke-width="2"/>
+      <text x="352" y="28" class="label" fill="#D8DDE8">Import</text>
+    </g>
+  </g>
+
+  <g transform="translate(860 204)">
+    <rect x="0" y="0" width="396" height="518" rx="8" fill="#F6F7FB"/>
+    <rect x="20" y="20" width="356" height="48" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <circle cx="44" cy="44" r="6" fill="#0F9D76"/>
+    <text x="60" y="50" class="label" fill="#141821">ILCE-7RM3 connected</text>
+    <text x="310" y="49" class="label" fill="#667085">Wi-Fi</text>
+
+    <text x="20" y="111" class="title" fill="#141821">July 16</text>
+    <text x="20" y="138" class="body" fill="#667085">126 originals on camera</text>
+
+    <g transform="translate(20 162)">
+      <rect x="0" y="0" width="170" height="144" rx="8" fill="#1738A6"/>
+      <rect x="12" y="12" width="146" height="92" rx="6" fill="#1E4ED8"/>
+      <circle cx="128" cy="36" r="13" fill="#FFFFFF" opacity="0.85"/>
+      <path d="M12 88l34-31 28 23 30-36 54 60H12z" fill="#0B0E14" opacity="0.7"/>
+      <text x="12" y="125" class="label" fill="#FFFFFF">DSC06124.JPG</text>
+      <rect x="186" y="0" width="170" height="144" rx="8" fill="#D8DDE8"/>
+      <rect x="198" y="12" width="146" height="92" rx="6" fill="#667085"/>
+      <circle cx="318" cy="38" r="12" fill="#E99A22"/>
+      <path d="M198 87l36-26 22 17 32-38 56 64H198z" fill="#141821" opacity="0.72"/>
+      <text x="198" y="125" class="label" fill="#141821">DSC06125.ARW</text>
+
+      <rect x="0" y="160" width="170" height="144" rx="8" fill="#D8DDE8"/>
+      <rect x="12" y="172" width="146" height="92" rx="6" fill="#0F9D76"/>
+      <circle cx="44" cy="198" r="12" fill="#FFFFFF" opacity="0.8"/>
+      <path d="M12 248l38-34 28 21 29-30 51 59H12z" fill="#141821" opacity="0.68"/>
+      <text x="12" y="285" class="label" fill="#141821">DSC06126.JPG</text>
+      <rect x="186" y="160" width="170" height="144" rx="8" fill="#1E4ED8"/>
+      <rect x="198" y="172" width="146" height="92" rx="6" fill="#1738A6"/>
+      <circle cx="319" cy="198" r="12" fill="#FFFFFF" opacity="0.85"/>
+      <path d="M198 249l32-27 27 20 30-42 57 64H198z" fill="#0B0E14" opacity="0.74"/>
+      <rect x="320" y="180" width="18" height="18" rx="4" fill="#FFFFFF"/>
+      <path d="M324 189l4 4 7-9" fill="none" stroke="#1E4ED8" stroke-width="2.5"/>
+      <text x="198" y="285" class="label" fill="#FFFFFF">DSC06127.JPG</text>
+    </g>
+
+    <rect x="20" y="482" width="356" height="54" rx="8" fill="#1E4ED8"/>
+    <path d="M123 496v17m-7-7 7 7 7-7m-15 14h16" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+    <text x="148" y="516" class="label" fill="#FFFFFF">Import 1 original</text>
+  </g>
+
+  <g transform="translate(112 780)">
+    <text x="0" y="0" class="label" fill="#667085">RESPONSIVE · MOTION-READY · ACCESSIBLE</text>
+    <text x="1087" y="0" class="label" fill="#667085">v1.0 · 2026</text>
+  </g>
+</svg>

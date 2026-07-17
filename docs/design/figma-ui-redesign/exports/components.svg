@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="2100" viewBox="0 0 1440 2100">
+  <title>SonyEdge component inventory</title>
+  <desc>Core components for connection, folders, photos, selection, downloads, navigation and states.</desc>
+  <style>
+    text { font-family: Roboto, Arial, sans-serif; letter-spacing: 0; }
+    .h1 { font-size: 42px; font-weight: 700; }
+    .h2 { font-size: 24px; font-weight: 700; }
+    .h3 { font-size: 18px; font-weight: 600; }
+    .body { font-size: 15px; font-weight: 400; }
+    .small { font-size: 12px; font-weight: 400; }
+    .label { font-size: 12px; font-weight: 600; }
+  </style>
+  <rect width="1440" height="2100" fill="#F6F7FB"/>
+
+  <g transform="translate(80 64)">
+    <text x="0" y="0" class="label" fill="#1E4ED8">SONYEDGE DESIGN SYSTEM</text>
+    <text x="0" y="58" class="h1" fill="#141821">Components</text>
+    <text x="0" y="94" class="body" fill="#667085">Reusable Compose-ready controls for the complete camera import journey.</text>
+    <rect x="1090" y="4" width="190" height="38" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <text x="1110" y="28" class="label" fill="#141821">48 DP MINIMUM TARGET</text>
+  </g>
+
+  <g transform="translate(80 198)">
+    <text x="0" y="0" class="h2" fill="#141821">Connection status</text>
+    <text x="0" y="30" class="body" fill="#667085">Status combines color, icon and explicit text; failure never relies on red alone.</text>
+    <g transform="translate(0 62)">
+      <rect x="0" y="0" width="296" height="130" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="30" cy="32" r="9" fill="#0F9D76"/>
+      <text x="50" y="37" class="h3" fill="#141821">Camera ready</text>
+      <text x="24" y="72" class="body" fill="#667085">ILCE-7RM3 · 192.168.122.1</text>
+      <rect x="24" y="88" width="126" height="28" rx="8" fill="#F6F7FB"/>
+      <text x="40" y="107" class="label" fill="#0F9D76">CONNECTED</text>
+
+      <rect x="320" y="0" width="296" height="130" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="350" cy="32" r="9" fill="#E99A22"/>
+      <text x="370" y="37" class="h3" fill="#141821">Connecting</text>
+      <text x="344" y="72" class="body" fill="#667085">Checking the saved camera endpoint…</text>
+      <rect x="344" y="94" width="248" height="6" rx="3" fill="#D8DDE8"/>
+      <rect x="344" y="94" width="132" height="6" rx="3" fill="#1E4ED8"/>
+
+      <rect x="640" y="0" width="296" height="130" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="670" cy="32" r="9" fill="#D94A4A"/>
+      <text x="690" y="37" class="h3" fill="#141821">Camera offline</text>
+      <text x="664" y="72" class="body" fill="#667085">Join the camera Wi-Fi to continue.</text>
+      <text x="664" y="106" class="label" fill="#1E4ED8">OPEN WI-FI SETTINGS</text>
+
+      <rect x="960" y="0" width="320" height="130" rx="8" fill="#141821"/>
+      <text x="984" y="32" class="label" fill="#667085">PRIMARY CONNECTION CTA</text>
+      <rect x="984" y="50" width="272" height="56" rx="8" fill="#1E4ED8"/>
+      <path d="M1012 74c10-8 20-8 30 0m-23 8c6-5 12-5 18 0m-10 7h1" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+      <text x="1058" y="84" class="body" fill="#FFFFFF" font-weight="600">Connect camera</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 466)">
+    <text x="0" y="0" class="h2" fill="#141821">Folders &amp; media</text>
+    <text x="0" y="30" class="body" fill="#667085">Stable rows and aspect-ratio cards prevent layout shift while previews load.</text>
+
+    <rect x="0" y="62" width="610" height="312" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <text x="24" y="94" class="label" fill="#667085">FOLDER ROWS</text>
+    <g transform="translate(24 114)">
+      <rect x="0" y="0" width="562" height="76" rx="8" fill="#F6F7FB"/>
+      <rect x="14" y="14" width="48" height="48" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <path d="M25 29h12l4 4h10v16H25z" fill="none" stroke="#1E4ED8" stroke-width="2.5"/>
+      <text x="78" y="31" class="h3" fill="#141821">July 16, 2026</text>
+      <text x="78" y="54" class="small" fill="#667085">126 originals · JPEG + RAW</text>
+      <path d="M532 30l10 8-10 8" fill="none" stroke="#667085" stroke-width="2.5"/>
+
+      <rect x="0" y="88" width="562" height="76" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="14" y="102" width="48" height="48" rx="8" fill="#F6F7FB"/>
+      <path d="M25 117h12l4 4h10v16H25z" fill="none" stroke="#667085" stroke-width="2.5"/>
+      <text x="78" y="119" class="h3" fill="#141821">July 15, 2026</text>
+      <text x="78" y="142" class="small" fill="#667085">48 originals · JPEG</text>
+      <path d="M532 118l10 8-10 8" fill="none" stroke="#667085" stroke-width="2.5"/>
+
+      <rect x="0" y="176" width="562" height="76" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="14" y="190" width="48" height="48" rx="8" fill="#F6F7FB"/>
+      <path d="M25 205h12l4 4h10v16H25z" fill="none" stroke="#667085" stroke-width="2.5"/>
+      <text x="78" y="207" class="h3" fill="#141821">03_01_0661153656…</text>
+      <text x="78" y="230" class="small" fill="#667085">Long names ellipsize · full path on details</text>
+      <path d="M532 206l10 8-10 8" fill="none" stroke="#667085" stroke-width="2.5"/>
+    </g>
+
+    <rect x="634" y="62" width="646" height="312" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <text x="658" y="94" class="label" fill="#667085">PHOTO CARD STATES</text>
+    <g transform="translate(658 114)">
+      <rect x="0" y="0" width="176" height="244" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="0" y="0" width="176" height="132" rx="8" fill="#D8DDE8"/>
+      <circle cx="138" cy="30" r="11" fill="#E99A22"/>
+      <path d="M0 114l42-40 36 27 35-45 63 76H0z" fill="#667085"/>
+      <text x="12" y="160" class="body" fill="#141821" font-weight="600">DSC06124.ARW</text>
+      <text x="12" y="183" class="small" fill="#667085">RAW · 82.4 MB</text>
+      <text x="12" y="218" class="label" fill="#E99A22">ORIGINAL</text>
+
+      <rect x="196" y="0" width="176" height="244" rx="8" fill="#FFFFFF" stroke="#1E4ED8" stroke-width="3"/>
+      <rect x="196" y="0" width="176" height="132" rx="8" fill="#1738A6"/>
+      <circle cx="337" cy="28" r="16" fill="#FFFFFF"/>
+      <path d="M330 28l5 5 9-12" fill="none" stroke="#1E4ED8" stroke-width="3"/>
+      <path d="M196 114l43-36 31 23 38-47 64 78H196z" fill="#141821" opacity="0.72"/>
+      <text x="208" y="160" class="body" fill="#141821" font-weight="600">DSC06125.JPG</text>
+      <text x="208" y="183" class="small" fill="#667085">JPEG · 12.5 MB</text>
+      <text x="208" y="218" class="label" fill="#1E4ED8">SELECTED</text>
+
+      <rect x="392" y="0" width="176" height="244" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="392" y="0" width="176" height="132" rx="8" fill="#F6F7FB"/>
+      <rect x="416" y="45" width="128" height="8" rx="4" fill="#D8DDE8"/>
+      <rect x="416" y="63" width="88" height="8" rx="4" fill="#D8DDE8"/>
+      <text x="404" y="160" class="body" fill="#141821" font-weight="600">Loading preview</text>
+      <text x="404" y="183" class="small" fill="#667085">Card dimensions stay fixed</text>
+      <text x="404" y="218" class="label" fill="#667085">PLACEHOLDER</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 900)">
+    <text x="0" y="0" class="h2" fill="#141821">Selection action bar</text>
+    <text x="0" y="30" class="body" fill="#667085">Appears only in selection mode and respects the bottom system inset.</text>
+    <rect x="0" y="62" width="1280" height="132" rx="8" fill="#141821"/>
+    <g transform="translate(24 86)">
+      <circle cx="24" cy="30" r="18" fill="#1E4ED8"/>
+      <text x="19" y="36" class="label" fill="#FFFFFF">8</text>
+      <text x="56" y="27" class="h3" fill="#FFFFFF">8 selected</text>
+      <text x="56" y="49" class="small" fill="#D8DDE8">246 MB total</text>
+      <rect x="686" y="0" width="130" height="60" rx="8" fill="#141821" stroke="#667085"/>
+      <text x="714" y="36" class="label" fill="#FFFFFF">SELECT ALL</text>
+      <rect x="828" y="0" width="112" height="60" rx="8" fill="#141821" stroke="#667085"/>
+      <text x="858" y="36" class="label" fill="#FFFFFF">INVERT</text>
+      <rect x="952" y="0" width="98" height="60" rx="8" fill="#141821" stroke="#667085"/>
+      <text x="980" y="36" class="label" fill="#FFFFFF">CLEAR</text>
+      <rect x="1062" y="0" width="170" height="60" rx="8" fill="#1E4ED8"/>
+      <path d="M1084 16v18m-7-7 7 7 7-7m-15 15h16" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+      <text x="1110" y="36" class="label" fill="#FFFFFF">IMPORT</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 1148)">
+    <text x="0" y="0" class="h2" fill="#141821">Download tasks</text>
+    <text x="0" y="30" class="body" fill="#667085">Each row exposes real progress and a recovery path without interrupting other items.</text>
+    <rect x="0" y="62" width="1280" height="314" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <g transform="translate(24 88)">
+      <rect x="0" y="0" width="1232" height="74" rx="8" fill="#F6F7FB"/>
+      <rect x="14" y="13" width="48" height="48" rx="8" fill="#1738A6"/>
+      <path d="M14 52l13-12 10 8 9-11 16 24H14z" fill="#0B0E14" opacity="0.65"/>
+      <text x="78" y="28" class="body" fill="#141821" font-weight="600">DSC06125.JPG</text>
+      <text x="78" y="51" class="small" fill="#667085">7.8 MB of 12.5 MB · 62%</text>
+      <rect x="430" y="34" width="570" height="6" rx="3" fill="#D8DDE8"/>
+      <rect x="430" y="34" width="353" height="6" rx="3" fill="#1E4ED8"/>
+      <rect x="1100" y="13" width="108" height="48" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="1131" y="43" class="label" fill="#141821">CANCEL</text>
+
+      <rect x="0" y="86" width="1232" height="74" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="14" y="99" width="48" height="48" rx="8" fill="#0F9D76"/>
+      <path d="M27 123l7 7 15-18" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+      <text x="78" y="114" class="body" fill="#141821" font-weight="600">DSC06124.ARW</text>
+      <text x="78" y="137" class="small" fill="#667085">Saved to DCIM/Sony Picture · 82.4 MB</text>
+      <rect x="1082" y="99" width="126" height="48" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="1116" y="129" class="label" fill="#0F9D76">OPEN</text>
+
+      <rect x="0" y="172" width="1232" height="74" rx="8" fill="#FFFFFF" stroke="#D94A4A"/>
+      <rect x="14" y="185" width="48" height="48" rx="8" fill="#D94A4A"/>
+      <path d="M28 199l20 20m0-20-20 20" stroke="#FFFFFF" stroke-width="3"/>
+      <text x="78" y="200" class="body" fill="#141821" font-weight="600">DSC06126.JPG</text>
+      <text x="78" y="223" class="small" fill="#667085">Camera connection was interrupted</text>
+      <rect x="1082" y="185" width="126" height="48" rx="8" fill="#1E4ED8"/>
+      <text x="1111" y="215" class="label" fill="#FFFFFF">RETRY</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 1582)">
+    <text x="0" y="0" class="h2" fill="#141821">Bottom navigation</text>
+    <text x="0" y="30" class="body" fill="#667085">Three stable destinations; icon and label remain visible at supported font scales.</text>
+    <rect x="0" y="62" width="680" height="120" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <g transform="translate(24 78)">
+      <rect x="0" y="0" width="198" height="88" rx="8" fill="#F6F7FB"/>
+      <rect x="83" y="14" width="32" height="26" rx="4" fill="none" stroke="#1E4ED8" stroke-width="2.5"/>
+      <path d="M87 36l8-8 6 6 5-5 6 7" fill="none" stroke="#1E4ED8" stroke-width="2"/>
+      <text x="74" y="68" class="label" fill="#1E4ED8">Browse</text>
+      <rect x="217" y="0" width="198" height="88" rx="8" fill="#FFFFFF"/>
+      <path d="M316 13v22m-8-8 8 8 8-8m-17 16h18" fill="none" stroke="#667085" stroke-width="2.5"/>
+      <text x="291" y="68" class="label" fill="#667085">Imports</text>
+      <rect x="434" y="0" width="198" height="88" rx="8" fill="#FFFFFF"/>
+      <circle cx="533" cy="28" r="11" fill="none" stroke="#667085" stroke-width="2.5"/>
+      <path d="M533 11v6m0 22v6m-17-17h6m22 0h6" stroke="#667085" stroke-width="2.5"/>
+      <text x="506" y="68" class="label" fill="#667085">Settings</text>
+    </g>
+
+    <rect x="704" y="62" width="576" height="120" rx="8" fill="#0B0E14"/>
+    <g transform="translate(728 78)">
+      <text x="0" y="20" class="label" fill="#667085">PREVIEW TOOLBAR</text>
+      <text x="0" y="48" class="body" fill="#FFFFFF">12 / 126 · DSC06125.JPG</text>
+      <rect x="352" y="0" width="80" height="56" rx="8" fill="#141821" stroke="#667085"/>
+      <text x="374" y="34" class="label" fill="#FFFFFF">EXIF</text>
+      <rect x="444" y="0" width="108" height="56" rx="8" fill="#1E4ED8"/>
+      <text x="470" y="34" class="label" fill="#FFFFFF">IMPORT</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 1822)">
+    <text x="0" y="0" class="h2" fill="#141821">Empty &amp; error states</text>
+    <g transform="translate(0 46)">
+      <rect x="0" y="0" width="610" height="182" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="24" y="24" width="56" height="56" rx="8" fill="#F6F7FB"/>
+      <path d="M37 41h14l4 4h12v18H37z" fill="none" stroke="#667085" stroke-width="2.5"/>
+      <text x="104" y="48" class="h3" fill="#141821">No camera folders yet</text>
+      <text x="104" y="76" class="body" fill="#667085">Connect the camera, then browse its storage.</text>
+      <rect x="104" y="104" width="160" height="50" rx="8" fill="#1E4ED8"/>
+      <text x="139" y="135" class="label" fill="#FFFFFF">CONNECT</text>
+
+      <rect x="634" y="0" width="646" height="182" rx="8" fill="#FFFFFF" stroke="#D94A4A"/>
+      <rect x="658" y="24" width="56" height="56" rx="8" fill="#D94A4A"/>
+      <path d="M674 40l24 24m0-24-24 24" stroke="#FFFFFF" stroke-width="3"/>
+      <text x="738" y="48" class="h3" fill="#141821">Could not load camera content</text>
+      <text x="738" y="76" class="body" fill="#667085">The camera stopped responding. Your selection is preserved.</text>
+      <rect x="738" y="104" width="132" height="50" rx="8" fill="#1E4ED8"/>
+      <text x="771" y="135" class="label" fill="#FFFFFF">RETRY</text>
+      <rect x="882" y="104" width="180" height="50" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <text x="915" y="135" class="label" fill="#141821">VIEW DETAILS</text>
+      <text x="1080" y="135" class="small" fill="#D94A4A">Error 408</text>
+    </g>
+  </g>
+</svg>

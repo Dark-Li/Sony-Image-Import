@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="600" viewBox="0 0 1440 600">
+  <title>SonyEdge screens divider</title>
+  <style>
+    text { font-family: Roboto, Arial, sans-serif; letter-spacing: 0; }
+  </style>
+  <rect width="1440" height="600" fill="#1E4ED8"/>
+  <rect x="80" y="80" width="52" height="6" rx="3" fill="#FFFFFF"/>
+  <text x="80" y="238" font-size="14" font-weight="600" fill="#D8DDE8">SONYEDGE PRODUCT EXPERIENCE / 03</text>
+  <text x="80" y="318" font-size="64" font-weight="700" fill="#FFFFFF">Responsive screens</text>
+  <text x="80" y="368" font-size="18" fill="#FFFFFF">Camera folders, photo grid, preview, imports and settings across compact and expanded phones.</text>
+  <g transform="translate(1160 170)">
+    <rect x="0" y="0" width="150" height="260" rx="8" fill="#1738A6" stroke="#FFFFFF" stroke-width="2"/>
+    <rect x="15" y="26" width="120" height="76" rx="8" fill="#FFFFFF"/>
+    <rect x="15" y="116" width="54" height="54" rx="8" fill="#FFFFFF"/>
+    <rect x="81" y="116" width="54" height="54" rx="8" fill="#FFFFFF"/>
+    <rect x="15" y="184" width="120" height="48" rx="8" fill="#FFFFFF"/>
+  </g>
+</svg>

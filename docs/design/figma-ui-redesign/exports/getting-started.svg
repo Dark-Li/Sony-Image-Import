@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1200" viewBox="0 0 1440 1200">
+  <title>SonyEdge getting started</title>
+  <desc>Product flow, destinations, responsive rules and preserved behavior for SonyEdge.</desc>
+  <style>
+    text { font-family: Roboto, Arial, sans-serif; letter-spacing: 0; }
+    .h1 { font-size: 42px; font-weight: 700; }
+    .h2 { font-size: 24px; font-weight: 700; }
+    .h3 { font-size: 18px; font-weight: 600; }
+    .body { font-size: 16px; font-weight: 400; }
+    .small { font-size: 13px; font-weight: 400; }
+    .label { font-size: 13px; font-weight: 600; }
+  </style>
+  <rect width="1440" height="1200" fill="#F6F7FB"/>
+
+  <g transform="translate(80 68)">
+    <text x="0" y="0" class="label" fill="#1E4ED8">SONYEDGE DESIGN SYSTEM</text>
+    <text x="0" y="58" class="h1" fill="#141821">Getting started</text>
+    <text x="0" y="94" class="body" fill="#667085">A functional map for the Android camera Wi-Fi import experience.</text>
+    <rect x="1080" y="0" width="200" height="40" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <circle cx="1104" cy="20" r="6" fill="#0F9D76"/>
+    <text x="1120" y="25" class="label" fill="#141821">74 tokens · Light theme</text>
+  </g>
+
+  <g transform="translate(80 208)">
+    <text x="0" y="0" class="h2" fill="#141821">One focused journey</text>
+    <text x="0" y="31" class="body" fill="#667085">Connect once, browse by date, preview clearly, then import originals with visible progress.</text>
+
+    <g transform="translate(0 68)">
+      <rect x="0" y="0" width="232" height="176" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="34" cy="34" r="18" fill="#1E4ED8"/>
+      <text x="29" y="40" class="label" fill="#FFFFFF">1</text>
+      <path d="M28 74c12-10 24-10 36 0M36 83c7-6 14-6 21 0M45 92h1" fill="none" stroke="#1E4ED8" stroke-width="3" stroke-linecap="round"/>
+      <text x="80" y="83" class="h3" fill="#141821">Connect</text>
+      <text x="24" y="124" class="small" fill="#667085">Bind traffic to the camera Wi-Fi</text>
+      <text x="24" y="146" class="small" fill="#667085">and restore the last endpoint.</text>
+
+      <path d="M244 88h48" stroke="#D8DDE8" stroke-width="2"/>
+      <path d="M284 80l8 8-8 8" fill="none" stroke="#667085" stroke-width="2"/>
+
+      <rect x="304" y="0" width="232" height="176" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="338" cy="34" r="18" fill="#1E4ED8"/>
+      <text x="333" y="40" class="label" fill="#FFFFFF">2</text>
+      <path d="M328 72h18l5 5h20v20h-43z" fill="none" stroke="#1E4ED8" stroke-width="3"/>
+      <text x="384" y="83" class="h3" fill="#141821">Browse dates</text>
+      <text x="328" y="124" class="small" fill="#667085">Open Camera → PhotoRoot → Date</text>
+      <text x="328" y="146" class="small" fill="#667085">without scanning every image first.</text>
+
+      <path d="M548 88h48" stroke="#D8DDE8" stroke-width="2"/>
+      <path d="M588 80l8 8-8 8" fill="none" stroke="#667085" stroke-width="2"/>
+
+      <rect x="608" y="0" width="232" height="176" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="642" cy="34" r="18" fill="#1E4ED8"/>
+      <text x="637" y="40" class="label" fill="#FFFFFF">3</text>
+      <rect x="632" y="70" width="45" height="31" rx="5" fill="none" stroke="#1E4ED8" stroke-width="3"/>
+      <circle cx="666" cy="78" r="4" fill="#E99A22"/>
+      <path d="M636 96l11-10 8 7 7-6 11 10" fill="none" stroke="#1E4ED8" stroke-width="2"/>
+      <text x="688" y="83" class="h3" fill="#141821">Preview</text>
+      <text x="632" y="124" class="small" fill="#667085">Swipe, zoom and inspect EXIF while</text>
+      <text x="632" y="146" class="small" fill="#667085">keeping image orientation correct.</text>
+
+      <path d="M852 88h48" stroke="#D8DDE8" stroke-width="2"/>
+      <path d="M892 80l8 8-8 8" fill="none" stroke="#667085" stroke-width="2"/>
+
+      <rect x="912" y="0" width="232" height="176" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <circle cx="946" cy="34" r="18" fill="#1E4ED8"/>
+      <text x="941" y="40" class="label" fill="#FFFFFF">4</text>
+      <path d="M942 69v21m-8-8 8 8 8-8m-17 17h19" fill="none" stroke="#1E4ED8" stroke-width="3"/>
+      <text x="982" y="83" class="h3" fill="#141821">Import</text>
+      <text x="936" y="124" class="small" fill="#667085">Save full-resolution JPEG or RAW to</text>
+      <text x="936" y="146" class="small" fill="#667085">DCIM/Sony Picture with retry.</text>
+
+      <rect x="1156" y="0" width="124" height="176" rx="8" fill="#141821"/>
+      <circle cx="1188" cy="35" r="10" fill="#0F9D76"/>
+      <text x="1178" y="79" class="h3" fill="#FFFFFF">Done</text>
+      <text x="1178" y="108" class="small" fill="#D8DDE8">Open</text>
+      <text x="1178" y="130" class="small" fill="#D8DDE8">Gallery</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 518)">
+    <text x="0" y="0" class="h2" fill="#141821">Three destinations</text>
+    <text x="0" y="31" class="body" fill="#667085">Navigation stays small and predictable; each destination owns one job.</text>
+
+    <g transform="translate(0 68)">
+      <rect x="0" y="0" width="405" height="226" rx="8" fill="#1E4ED8"/>
+      <rect x="24" y="24" width="48" height="48" rx="8" fill="#FFFFFF"/>
+      <rect x="35" y="36" width="26" height="20" rx="3" fill="none" stroke="#1E4ED8" stroke-width="2.5"/>
+      <path d="M37 53l7-7 5 5 4-4 6 7" fill="none" stroke="#1E4ED8" stroke-width="2"/>
+      <text x="24" y="112" class="h2" fill="#FFFFFF">Browse</text>
+      <text x="24" y="145" class="body" fill="#FFFFFF">Folders, photo grid and selection.</text>
+      <text x="24" y="176" class="small" fill="#D8DDE8">Default destination · camera content first</text>
+      <rect x="333" y="168" width="48" height="34" rx="8" fill="#1738A6"/>
+      <text x="347" y="190" class="label" fill="#FFFFFF">01</text>
+
+      <rect x="437" y="0" width="405" height="226" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="461" y="24" width="48" height="48" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <path d="M485 34v18m-7-7 7 7 7-7m-15 14h16" fill="none" stroke="#1E4ED8" stroke-width="2.5"/>
+      <text x="461" y="112" class="h2" fill="#141821">Imports</text>
+      <text x="461" y="145" class="body" fill="#667085">Active queue, completion and retry.</text>
+      <text x="461" y="176" class="small" fill="#667085">One transfer status surface · no hidden work</text>
+      <rect x="770" y="168" width="48" height="34" rx="8" fill="#F6F7FB"/>
+      <text x="784" y="190" class="label" fill="#1738A6">02</text>
+
+      <rect x="874" y="0" width="406" height="226" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+      <rect x="898" y="24" width="48" height="48" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <circle cx="922" cy="48" r="10" fill="none" stroke="#1E4ED8" stroke-width="2.5"/>
+      <path d="M922 31v5m0 24v5m-17-17h5m24 0h5" stroke="#1E4ED8" stroke-width="2.5"/>
+      <text x="898" y="112" class="h2" fill="#141821">Settings</text>
+      <text x="898" y="145" class="body" fill="#667085">Connection tools and diagnostics.</text>
+      <text x="898" y="176" class="small" fill="#667085">Advanced controls stay out of browsing</text>
+      <rect x="1208" y="168" width="48" height="34" rx="8" fill="#F6F7FB"/>
+      <text x="1222" y="190" class="label" fill="#1738A6">03</text>
+    </g>
+  </g>
+
+  <g transform="translate(80 892)">
+    <rect x="0" y="0" width="820" height="238" rx="8" fill="#FFFFFF" stroke="#D8DDE8"/>
+    <text x="28" y="42" class="h2" fill="#141821">Responsive by construction</text>
+    <text x="28" y="76" class="body" fill="#667085">Layouts respond to available width, safe insets and font scaling.</text>
+    <g transform="translate(28 105)">
+      <rect x="0" y="0" width="152" height="92" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <text x="16" y="28" class="label" fill="#1E4ED8">COMPACT</text>
+      <text x="16" y="54" class="body" fill="#141821">320–599 dp</text>
+      <text x="16" y="77" class="small" fill="#667085">2-column grid</text>
+      <rect x="172" y="0" width="176" height="92" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <text x="188" y="28" class="label" fill="#1E4ED8">MEDIUM</text>
+      <text x="188" y="54" class="body" fill="#141821">600–839 dp</text>
+      <text x="188" y="77" class="small" fill="#667085">3–4 columns</text>
+      <rect x="368" y="0" width="176" height="92" rx="8" fill="#F6F7FB" stroke="#D8DDE8"/>
+      <text x="384" y="28" class="label" fill="#1E4ED8">EXPANDED</text>
+      <text x="384" y="54" class="body" fill="#141821">840+ dp</text>
+      <text x="384" y="77" class="small" fill="#667085">Two-pane layout</text>
+      <rect x="564" y="0" width="200" height="92" rx="8" fill="#141821"/>
+      <text x="580" y="28" class="label" fill="#FFFFFF">ALWAYS</text>
+      <text x="580" y="54" class="body" fill="#FFFFFF">48 dp touch targets</text>
+      <text x="580" y="77" class="small" fill="#D8DDE8">Insets + 1.5× text</text>
+    </g>
+
+    <rect x="844" y="0" width="436" height="238" rx="8" fill="#141821"/>
+    <text x="872" y="42" class="h2" fill="#FFFFFF">Behavior stays intact</text>
+    <circle cx="878" cy="80" r="5" fill="#0F9D76"/>
+    <text x="894" y="85" class="body" fill="#D8DDE8">Network binding and endpoint discovery</text>
+    <circle cx="878" cy="116" r="5" fill="#0F9D76"/>
+    <text x="894" y="121" class="body" fill="#D8DDE8">DMS pagination and cached folder traversal</text>
+    <circle cx="878" cy="152" r="5" fill="#0F9D76"/>
+    <text x="894" y="157" class="body" fill="#D8DDE8">Preview paging, zoom, EXIF and orientation</text>
+    <circle cx="878" cy="188" r="5" fill="#0F9D76"/>
+    <text x="894" y="193" class="body" fill="#D8DDE8">Batch import, cancel, retry and MediaStore</text>
+  </g>
+</svg>
