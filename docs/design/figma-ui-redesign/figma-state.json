@@ -3,8 +3,8 @@
   "fileKey": "qvqszCja2Chzf27h1Bx2qS",
   "fileUrl": "https://www.figma.com/design/qvqszCja2Chzf27h1Bx2qS",
   "branch": "feature/figma-ui-redesign",
-  "phase": "phase2-complete",
-  "step": "responsive-screen-design-validated-in-browser",
+  "phase": "phase3-complete",
+  "step": "compose-implementation-validated-on-camera-connected-phone",
   "entities": {
     "collections": {
       "primitives": "VariableCollectionId:3:2",
@@ -68,15 +68,17 @@
     "svgSourceCount": 8,
     "invalidSvgCount": 0,
     "browserVisualStatus": "PASS",
+    "composeBuildStatus": "PASS",
+    "phoneCameraRegressionStatus": "PASS",
     "status": "PASS"
   },
   "pendingValidations": [
-    "Validate the Compose implementation against compact, medium and expanded layouts",
-    "Run camera-connected phone regression testing after the UI refactor"
+    "Capture an expanded 600+ dp Compose screenshot when a tablet or emulator is available"
   ],
   "completedSteps": [
     "phase0",
     "phase1",
-    "phase2"
+    "phase2",
+    "phase3"
   ]
 }

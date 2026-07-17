@@ -10,6 +10,9 @@ import android.util.LruCache
 import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,6 +26,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -60,7 +64,6 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
@@ -78,6 +81,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -96,7 +102,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -127,16 +132,17 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-private val SonyBlue = Color(0xFF0057B8)
-private val SonyBlueDark = Color(0xFF073A73)
-private val SonyBlueSoft = Color(0xFFE8F1FF)
-private val SurfaceBg = Color(0xFFFAFBFD)
-private val SurfaceSoft = Color(0xFFF1F5F9)
-private val BorderSoft = Color(0xFFD9E2EC)
-private val TextMain = Color(0xFF111827)
-private val TextMuted = Color(0xFF64748B)
-private val SuccessGreen = Color(0xFF0F766E)
-private val SuccessSoft = Color(0xFFE6FFFA)
+private val SonyBlue = Color(0xFF1E4ED8)
+private val SonyBlueDark = Color(0xFF1738A6)
+private val SonyBlueSoft = Color(0xFFE8EEFF)
+private val SurfaceBg = Color(0xFFF6F7FB)
+private val SurfaceSoft = Color(0xFFF0F2F7)
+private val BorderSoft = Color(0xFFD8DDE8)
+private val TextMain = Color(0xFF141821)
+private val TextMuted = Color(0xFF667085)
+private val SuccessGreen = Color(0xFF0F9D76)
+private val SuccessSoft = Color(0xFFE7F7F1)
+private val PreviewBlack = Color(0xFF0B0E14)
 
 private val imageCache = object : LruCache<String, Bitmap>(128 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
@@ -172,6 +178,7 @@ fun SonyEdgeApp(
     onToggleSelection: (CameraContentItem) -> Unit,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
+    onInvertSelection: () -> Unit,
     onDownloadSelected: () -> Unit,
     onDownloadPreview: () -> Unit,
     onCancelDownloads: () -> Unit,
@@ -199,46 +206,59 @@ fun SonyEdgeApp(
         )
     ) {
         Surface(Modifier.fillMaxSize(), color = SurfaceBg) {
-            Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                AppHeader(state)
-                Box(Modifier.weight(1f)) {
-                    when (state.activeTab) {
-                        SonyEdgeTab.Library -> LibraryScreen(
-                            state = state,
-                            onConnect = onConnect,
-                            onBack = onBack,
-                            onPreview = onPreview,
-                            onToggle = onToggleSelection,
-                            onSelectAll = onSelectAll,
-                            onClear = onClearSelection,
-                            onDownload = onDownloadSelected
-                        )
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val expanded = maxWidth >= 600.dp
+                Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                    AppHeader(state)
+                    Row(Modifier.weight(1f)) {
+                        if (expanded) {
+                            AppNavigationRail(state.activeTab, onTab)
+                        }
+                        Box(Modifier.weight(1f)) {
+                            when (state.activeTab) {
+                                SonyEdgeTab.Library -> LibraryScreen(
+                                    state = state,
+                                    expanded = expanded,
+                                    onConnect = onConnect,
+                                    onBack = onBack,
+                                    onPreview = onPreview,
+                                    onToggle = onToggleSelection,
+                                    onSelectAll = onSelectAll,
+                                    onClear = onClearSelection,
+                                    onInvert = onInvertSelection,
+                                    onDownload = onDownloadSelected
+                                )
 
-                        SonyEdgeTab.Camera -> CameraScreen(
-                            state = state,
-                            onConnect = onConnect,
-                            onRefresh = onRefresh,
-                            onRoot = onRoot,
-                            onBack = onBack,
-                            onOpenFolder = onOpenFolder
-                        )
+                                SonyEdgeTab.Camera -> CameraScreen(
+                                    state = state,
+                                    expanded = expanded,
+                                    onConnect = onConnect,
+                                    onRefresh = onRefresh,
+                                    onRoot = onRoot,
+                                    onBack = onBack,
+                                    onOpenFolder = onOpenFolder
+                                )
 
-                        SonyEdgeTab.Transfers -> TransfersScreen(
-                            state = state,
-                            onCancel = onCancelDownloads,
-                            onRetry = onRetryFailed,
-                            onOpenGallery = onOpenGallery
-                        )
+                                SonyEdgeTab.Transfers -> TransfersScreen(
+                                    state = state,
+                                    onCancel = onCancelDownloads,
+                                    onRetry = onRetryFailed,
+                                    onOpenGallery = onOpenGallery
+                                )
 
-                        SonyEdgeTab.Settings -> SettingsScreen(
-                            state = state,
-                            onConnect = onConnect,
-                            onOpenGallery = onOpenGallery,
-                            onClearLogs = onClearLogs
-                        )
+                                SonyEdgeTab.Settings -> SettingsScreen(
+                                    state = state,
+                                    onConnect = onConnect,
+                                    onOpenGallery = onOpenGallery,
+                                    onClearLogs = onClearLogs
+                                )
+                            }
+                        }
+                    }
+                    if (!expanded) {
+                        BottomNavigation(state.activeTab, onTab)
                     }
                 }
-                BottomNavigation(state.activeTab, onTab)
             }
         }
     }
@@ -273,18 +293,19 @@ private fun AppHeader(state: SonyEdgeUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .height(58.dp)
+            .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 "SonyEdge",
-                fontSize = 17.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 0.sp,
                 maxLines = 1
             )
-            Text("A7R III import", color = SonyBlue, fontSize = 10.sp, maxLines = 1)
+            Text("Sony camera import", color = TextMuted, fontSize = 11.sp, maxLines = 1)
         }
         Surface(
             shape = RoundedCornerShape(8.dp),
@@ -307,7 +328,7 @@ private fun AppHeader(state: SonyEdgeUiState) {
                 }
             )
         ) {
-            Row(Modifier.height(28.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.height(32.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(headerText, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
@@ -370,16 +391,22 @@ private fun ToolbarButton(
 @Composable
 private fun LibraryScreen(
     state: SonyEdgeUiState,
+    expanded: Boolean,
     onConnect: () -> Unit,
     onBack: () -> Unit,
     onPreview: (CameraContentItem) -> Unit,
     onToggle: (CameraContentItem) -> Unit,
     onSelectAll: () -> Unit,
     onClear: () -> Unit,
+    onInvert: () -> Unit,
     onDownload: () -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 12.dp)
+        ) {
             val titleLeading: (@Composable () -> Unit)? = if (state.photos.isNotEmpty() && state.folderStack.isNotEmpty()) {
                 {
                     IconButton(onClick = onBack, enabled = !state.loading, modifier = Modifier.size(38.dp)) {
@@ -414,10 +441,10 @@ private fun LibraryScreen(
                 )
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Adaptive(if (expanded) 148.dp else 112.dp),
                     contentPadding = PaddingValues(bottom = if (state.selectedKeys.isEmpty()) 20.dp else 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.photos, key = { itemKey(it) }) { item ->
                         PhotoTile(
@@ -436,9 +463,9 @@ private fun LibraryScreen(
                 selectedCount = state.selectedKeys.size,
                 totalCount = state.photos.size,
                 onDownload = onDownload,
-                onToggleAll = {
-                    if (state.selectedKeys.size == state.photos.size) onClear() else onSelectAll()
-                },
+                onSelectAll = onSelectAll,
+                onClear = onClear,
+                onInvert = onInvert,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -448,13 +475,18 @@ private fun LibraryScreen(
 @Composable
 private fun CameraScreen(
     state: SonyEdgeUiState,
+    expanded: Boolean,
     onConnect: () -> Unit,
     onRefresh: () -> Unit,
     onRoot: () -> Unit,
     onBack: () -> Unit,
     onOpenFolder: (DmsContainerItem) -> Unit
 ) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 12.dp)
+    ) {
         PageTitle(
             title = albumTitle(state),
             subtitle = albumSubtitle(state),
@@ -487,7 +519,12 @@ private fun CameraScreen(
         } else {
             FolderSummary(state)
             Spacer(Modifier.height(10.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(280.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
                 items(state.folders, key = { it.id }) { folder ->
                     FolderRow(folder, enabled = !state.loading, onOpen = onOpenFolder)
                 }
@@ -960,13 +997,13 @@ private fun toImportTerms(value: String): String =
 
 @Composable
 private fun BottomNavigation(activeTab: SonyEdgeTab, onTab: (SonyEdgeTab) -> Unit) {
-    NavigationBar(containerColor = Color.White, modifier = Modifier.navigationBarsPadding()) {
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 0.dp,
+        modifier = Modifier.navigationBarsPadding()
+    ) {
         navItems.forEach { item ->
-            val selected = if (item.tab == SonyEdgeTab.Library) {
-                activeTab == SonyEdgeTab.Library || activeTab == SonyEdgeTab.Camera
-            } else {
-                activeTab == item.tab
-            }
+            val selected = isNavigationSelected(item.tab, activeTab)
             NavigationBarItem(
                 selected = selected,
                 onClick = { onTab(item.tab) },
@@ -985,41 +1022,101 @@ private fun BottomNavigation(activeTab: SonyEdgeTab, onTab: (SonyEdgeTab) -> Uni
 }
 
 @Composable
+private fun AppNavigationRail(activeTab: SonyEdgeTab, onTab: (SonyEdgeTab) -> Unit) {
+    NavigationRail(
+        containerColor = Color.White,
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(92.dp)
+    ) {
+        Spacer(Modifier.height(12.dp))
+        navItems.forEach { item ->
+            NavigationRailItem(
+                selected = isNavigationSelected(item.tab, activeTab),
+                onClick = { onTab(item.tab) },
+                icon = { Icon(item.icon, contentDescription = item.label) },
+                label = { Text(item.label, maxLines = 1, fontSize = 11.sp) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = SonyBlue,
+                    selectedTextColor = TextMain,
+                    indicatorColor = SonyBlueSoft,
+                    unselectedIconColor = TextMuted,
+                    unselectedTextColor = TextMuted
+                )
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+}
+
+private fun isNavigationSelected(itemTab: SonyEdgeTab, activeTab: SonyEdgeTab): Boolean =
+    if (itemTab == SonyEdgeTab.Library) {
+        activeTab == SonyEdgeTab.Library || activeTab == SonyEdgeTab.Camera
+    } else {
+        activeTab == itemTab
+    }
+
+@Composable
 private fun SelectionBar(
     selectedCount: Int,
     totalCount: Int,
     onDownload: () -> Unit,
-    onToggleAll: () -> Unit,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+    onInvert: () -> Unit,
     modifier: Modifier
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-        color = Color.White,
-        shape = RoundedCornerShape(8.dp),
-        shadowElevation = 4.dp
+    AnimatedVisibility(
+        visible = selectedCount > 0,
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(140)),
+        modifier = modifier
     ) {
-        Row(
-            Modifier
+        Surface(
+            modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            color = Color.White,
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft),
+            shadowElevation = 6.dp
         ) {
-            Text(
-                "$selectedCount selected",
-                modifier = Modifier.weight(1f),
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            TextButton(onClick = onToggleAll, modifier = Modifier.height(44.dp), shape = RoundedCornerShape(8.dp)) {
-                Text(if (selectedCount == totalCount) "Clear" else "All", maxLines = 1)
-            }
-            Button(onClick = onDownload, shape = RoundedCornerShape(8.dp), modifier = Modifier.height(44.dp)) {
-                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Import ($selectedCount)", maxLines = 1)
+            BoxWithConstraints {
+                val compact = maxWidth < 390.dp
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("$selectedCount selected", fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("$totalCount items", color = TextMuted, fontSize = 11.sp, maxLines = 1)
+                    }
+                    IconButton(onClick = onSelectAll, enabled = selectedCount < totalCount) {
+                        Icon(Icons.Default.DoneAll, contentDescription = "Select all", tint = SonyBlue)
+                    }
+                    IconButton(onClick = onInvert) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Invert selection", tint = SonyBlue)
+                    }
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear selection", tint = TextMuted)
+                    }
+                    Button(
+                        onClick = onDownload,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(46.dp),
+                        contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 16.dp)
+                    ) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        if (!compact) {
+                            Spacer(Modifier.width(6.dp))
+                            Text("Import", maxLines = 1)
+                        }
+                    }
+                }
             }
         }
     }
@@ -1034,6 +1131,11 @@ private fun PhotoTile(
     onPreview: () -> Unit,
     onToggle: () -> Unit
 ) {
+    val selectionAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = tween(180),
+        label = "photoSelection"
+    )
     Box(
         modifier = Modifier.combinedClickable(
             onClick = { if (selectionMode) onToggle() else onPreview() },
@@ -1064,12 +1166,8 @@ private fun PhotoTile(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .height(54.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.56f))
-                    )
-                )
+                .height(34.dp)
+                .background(Color.Black.copy(alpha = 0.58f))
         ) {
             Text(
                 item.title.substringBeforeLast('.', item.title),
@@ -1089,6 +1187,7 @@ private fun PhotoTile(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(5.dp)
+                    .graphicsLayer { alpha = if (selected) selectionAlpha else 1f }
                     .semantics {
                         contentDescription = if (selected) "Deselect ${item.title}" else "Select ${item.title}"
                     }
@@ -1129,7 +1228,8 @@ private fun FolderRow(folder: DmsContainerItem, enabled: Boolean, onOpen: (DmsCo
     Card(
         modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { onOpen(folder) },
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft)
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(shape = RoundedCornerShape(8.dp), color = SonyBlueSoft, contentColor = SonyBlue) {
@@ -1229,7 +1329,7 @@ private fun PhotoPreview(
             decorFitsSystemWindows = false
         )
     ) {
-        Surface(Modifier.fillMaxSize(), color = Color(0xFF0B1220)) {
+        Surface(Modifier.fillMaxSize(), color = PreviewBlack) {
             val context = LocalContext.current.applicationContext
             var controlsVisible by remember { mutableStateOf(true) }
             var previewZoomed by remember { mutableStateOf(false) }
@@ -1296,17 +1396,16 @@ private fun PhotoPreview(
                     }
                 }
 
-                if (controlsVisible) {
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(180)),
+                    exit = fadeOut(tween(140)),
+                    modifier = Modifier.align(Alignment.TopCenter)
+                ) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
                             .fillMaxWidth()
-                            .height(112.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent)
-                                )
-                            )
+                            .background(PreviewBlack.copy(alpha = 0.88f))
                     ) {
                         Row(
                             modifier = Modifier
@@ -1326,23 +1425,22 @@ private fun PhotoPreview(
                                 Text(currentItem.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("${page + 1} / ${items.size}", color = Color.White.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
                             }
-                            IconButton(onClick = { controlsVisible = false }, modifier = Modifier.size(42.dp)) {
-                                Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = Color.White.copy(alpha = 0.72f))
-                            }
                         }
                     }
+                }
 
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(180)),
+                    exit = fadeOut(tween(140)),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
                     Column(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.76f))
-                                )
-                            )
+                            .background(PreviewBlack.copy(alpha = 0.88f))
                             .navigationBarsPadding()
-                            .padding(start = 10.dp, top = 56.dp, end = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         Row(
                             Modifier
@@ -1390,7 +1488,6 @@ private fun PhotoPreview(
                                 }
                             }
                         }
-                        Spacer(Modifier.height(40.dp))
                     }
                 }
             }

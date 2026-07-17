@@ -50,6 +50,7 @@ class ComposeMainActivity : ComponentActivity() {
                 onToggleSelection = viewModel::toggleSelection,
                 onSelectAll = viewModel::selectAllVisible,
                 onClearSelection = viewModel::clearSelection,
+                onInvertSelection = viewModel::invertSelection,
                 onDownloadSelected = viewModel::downloadSelected,
                 onDownloadPreview = viewModel::downloadPreview,
                 onCancelDownloads = viewModel::cancelDownloads,
