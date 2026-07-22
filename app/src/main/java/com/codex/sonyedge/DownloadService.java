@@ -12,22 +12,33 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.provider.MediaStore;
+import android.util.Log;
 
 import org.json.JSONArray;
 
+import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class DownloadService extends Service {
+    private static final String TAG = "SonyEdge-Download";
     public static final String ACTION_START = "com.codex.sonyedge.START_DOWNLOAD";
     public static final String ACTION_CANCEL = "com.codex.sonyedge.CANCEL_DOWNLOAD";
     public static final String ACTION_PROGRESS = "com.codex.sonyedge.DOWNLOAD_PROGRESS";
@@ -46,6 +57,9 @@ public class DownloadService extends Service {
     public static final String EXTRA_ETA_SECONDS = "eta_seconds";
     public static final String EXTRA_BATCH_BYTES_DONE = "batch_bytes_done";
     public static final String EXTRA_ELAPSED_SECONDS = "elapsed_seconds";
+    public static final String EXTRA_XPUSH_CONTROL_URL = "xpush_control_url";
+    public static final String EXTRA_XPUSH_SERVICE_TYPE = "xpush_service_type";
+    public static final String EXTRA_XPUSH_TOTAL = "xpush_total";
 
     public static final String STATE_STARTED = "started";
     public static final String STATE_FILE_STARTED = "file_started";
@@ -59,9 +73,13 @@ public class DownloadService extends Service {
     private static final String CHANNEL_ID = "sonyedge_downloads";
     private static final int NOTIFICATION_ID = 7;
     private static final String PUBLIC_OUTPUT_DIR = Environment.DIRECTORY_DCIM + "/Sony Picture";
+    private static final String USER_AGENT = "UPnP/1.0 DLNADOC/1.50 SonyEdge/" + BuildConfig.VERSION_NAME;
+    private static final int MAX_DOWNLOAD_ATTEMPTS = 5;
+    private static final long[] RETRY_DELAYS_MS = {300, 800, 1500, 1500};
+    private static final long[] XPUSH_RETRY_DELAYS_MS = {300, 800};
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private volatile boolean cancelled;
+    private final AtomicReference<BatchRun> activeBatch = new AtomicReference<>();
 
     @Override
     public void onCreate() {
@@ -71,20 +89,39 @@ public class DownloadService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null || !ACTION_START.equals(intent.getAction())) {
-            if (intent != null && ACTION_CANCEL.equals(intent.getAction())) {
-                cancelled = true;
-                publishProgress(STATE_CANCELLED, "Cancelling downloads...", 0, 0, 0, 0, "", "");
-                updateNotification("Cancelling downloads");
+        String action = intent == null ? "" : intent.getAction();
+        if (ACTION_CANCEL.equals(action)) {
+            BatchRun run = activeBatch.get();
+            if (run != null) {
+                run.latestStartId.set(startId);
+                if (!run.terminalPublished.get()) {
+                    run.cancel();
+                    updateNotification("Cancelling downloads");
+                }
+            } else {
+                stopSelfResult(startId);
             }
             return START_NOT_STICKY;
         }
+        if (!ACTION_START.equals(action)) {
+            stopSelfResult(startId);
+            return START_NOT_STICKY;
+        }
 
-        cancelled = false;
+        BatchRun run = new BatchRun(
+                startId,
+                intent.getStringExtra(EXTRA_ITEMS),
+                intent.getStringExtra(EXTRA_XPUSH_CONTROL_URL),
+                intent.getStringExtra(EXTRA_XPUSH_SERVICE_TYPE),
+                intent.getIntExtra(EXTRA_XPUSH_TOTAL, 0)
+        );
+        BatchRun previous = activeBatch.getAndSet(run);
+        if (previous != null) {
+            previous.cancel();
+        }
         startForeground(NOTIFICATION_ID, notification("Preparing downloads"));
-        String itemsJson = intent.getStringExtra(EXTRA_ITEMS);
-        executor.execute(() -> runDownloads(itemsJson));
-        return START_REDELIVER_INTENT;
+        executor.execute(() -> runDownloads(run));
+        return START_NOT_STICKY;
     }
 
     @Override
@@ -94,39 +131,52 @@ public class DownloadService extends Service {
 
     @Override
     public void onDestroy() {
+        BatchRun run = activeBatch.get();
+        if (run != null) {
+            run.cancel();
+        }
         executor.shutdownNow();
         super.onDestroy();
     }
 
-    private void runDownloads(String itemsJson) {
+    private void runDownloads(BatchRun run) {
         int total = 0;
         int success = 0;
         int failed = 0;
         long batchBytesDone = 0;
         long startedAt = System.currentTimeMillis();
+        CameraWifiBinding.Lease wifiLease = null;
         try {
-            JSONArray array = new JSONArray(itemsJson == null ? "[]" : itemsJson);
+            if (!isCurrent(run)) {
+                return;
+            }
+            wifiLease = CameraWifiBinding.acquire(this);
+            JSONArray array = new JSONArray(run.itemsJson == null ? "[]" : run.itemsJson);
             total = array.length();
-            publishProgress(STATE_STARTED, "Queued " + total + " downloads.", total, 0, 0, 0, "", "");
+            publishFor(run, STATE_STARTED, "Queued " + total + " downloads.", total, 0, 0, 0, "", "");
+
             File dir = new File(getCacheDir(), "downloads");
             if (!dir.exists() && !dir.mkdirs()) {
                 throw new IllegalStateException("Cannot create output directory: " + dir);
             }
 
             for (int i = 0; i < array.length(); i++) {
-                if (cancelled) {
-                    publishProgress(STATE_CANCELLED, "Downloads cancelled. Success " + success + ", failed " + failed + ".", total, i, success, failed, "", "");
-                    return;
-                }
+                throwIfCancelled(run);
                 CameraContentItem item = CameraContentItem.fromJson(array.getJSONObject(i));
                 String prefix = String.format(Locale.US, "%d/%d ", i + 1, array.length());
-                publishProgress(STATE_FILE_STARTED, prefix + "Downloading " + item.title, total, i + 1, success, failed, item.title, "");
+                publishFor(run, STATE_FILE_STARTED, prefix + "Downloading " + item.title,
+                        total, i + 1, success, failed, item.title, "");
                 updateNotification(prefix + item.title);
                 try {
-                    DownloadValidator.ValidationResult result = downloadOne(item, dir, total, i + 1, success, failed, batchBytesDone, startedAt);
+                    DownloadValidator.ValidationResult result = downloadWithRetries(
+                            run, item, dir, total, i + 1, success, failed, batchBytesDone, startedAt
+                    );
+                    throwIfCancelled(run);
                     batchBytesDone += result.bytes;
                     success++;
-                    publishProgress(
+                    reportXPushProgress(run, success + failed);
+                    publishFor(
+                            run,
                             STATE_FILE_DONE,
                             prefix + item.title + " -> " + result.toDisplayString(),
                             total,
@@ -142,11 +192,16 @@ public class DownloadService extends Service {
                             batchBytesDone,
                             elapsedSeconds(startedAt)
                     );
+                } catch (InterruptedException ex) {
+                    throw ex;
                 } catch (Exception ex) {
+                    throwIfCancelled(run);
                     failed++;
-                    publishProgress(
+                    reportXPushProgress(run, success);
+                    publishFor(
+                            run,
                             STATE_FILE_FAILED,
-                            prefix + item.title + " failed: " + ex.getMessage(),
+                            prefix + item.title + " failed: " + messageOf(ex),
                             total,
                             i + 1,
                             success,
@@ -162,46 +217,134 @@ public class DownloadService extends Service {
                     );
                 }
             }
-            publishProgress(
-                    STATE_DONE,
-                    "Downloads complete. Success " + success + ", failed " + failed + ". Output: DCIM/Sony Picture",
+
+            throwIfCancelled(run);
+            String xPushFailure = finishXPush(run, failed == 0 ? 0 : 1);
+            boolean protocolFailed = run.xPushProtocolFailed.get() || xPushFailure != null;
+            publishTerminal(
+                    run,
+                    protocolFailed ? STATE_FATAL : STATE_DONE,
+                    protocolFailed
+                            ? "Downloads saved, but camera transfer finalization failed: "
+                                    + (xPushFailure == null ? "X_TransferProgress failed" : xPushFailure)
+                            : "Downloads complete. Success " + success + ", failed " + failed
+                                    + ". Output: DCIM/Sony Picture",
                     total,
                     total,
                     success,
                     failed,
-                    "",
-                    "",
-                    0,
-                    0,
-                    averageBytesPerSecond(batchBytesDone, startedAt),
-                    0,
                     batchBytesDone,
-                    elapsedSeconds(startedAt)
+                    startedAt
+            );
+        } catch (InterruptedException ex) {
+            String xPushFailure = finishXPush(run, 1);
+            publishTerminal(
+                    run,
+                    STATE_CANCELLED,
+                    "Downloads cancelled. Success " + success + ", failed " + failed + "."
+                            + xPushFailureSuffix(xPushFailure),
+                    total,
+                    0,
+                    success,
+                    failed,
+                    batchBytesDone,
+                    startedAt
             );
         } catch (Exception ex) {
-            publishProgress(
-                    STATE_FATAL,
-                    "Download failed: " + ex.getMessage(),
-                    total,
-                    0,
-                    success,
-                    failed,
-                    "",
-                    "",
-                    0,
-                    0,
-                    averageBytesPerSecond(batchBytesDone, startedAt),
-                    0,
-                    batchBytesDone,
-                    elapsedSeconds(startedAt)
-            );
+            String xPushFailure = finishXPush(run, 1);
+            if (run.cancelled.get()) {
+                publishTerminal(
+                        run,
+                        STATE_CANCELLED,
+                        "Downloads cancelled. Success " + success + ", failed " + failed + "."
+                                + xPushFailureSuffix(xPushFailure),
+                        total,
+                        0,
+                        success,
+                        failed,
+                        batchBytesDone,
+                        startedAt
+                );
+            } else {
+                publishTerminal(
+                        run,
+                        STATE_FATAL,
+                        "Download failed: " + messageOf(ex) + xPushFailureSuffix(xPushFailure),
+                        total,
+                        0,
+                        success,
+                        failed,
+                        batchBytesDone,
+                        startedAt
+                );
+            }
         } finally {
-            stopForeground(STOP_FOREGROUND_DETACH);
-            stopSelf();
+            if (wifiLease != null) {
+                wifiLease.close();
+            }
+            if (activeBatch.compareAndSet(run, null)) {
+                stopForeground(STOP_FOREGROUND_DETACH);
+            }
+            stopSelfResult(run.latestStartId.get());
         }
     }
 
-    private DownloadValidator.ValidationResult downloadOne(
+    private DownloadValidator.ValidationResult downloadWithRetries(
+            BatchRun run,
+            CameraContentItem item,
+            File dir,
+            int total,
+            int index,
+            int success,
+            int failed,
+            long batchBytesBeforeFile,
+            long batchStartedAt
+    ) throws Exception {
+        Exception lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS; attempt++) {
+            throwIfCancelled(run);
+            try {
+                return downloadAttempt(
+                        run, item, dir, total, index, success, failed,
+                        batchBytesBeforeFile, batchStartedAt
+                );
+            } catch (InterruptedException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                lastFailure = ex;
+                if (!isRetryable(ex) || attempt >= MAX_DOWNLOAD_ATTEMPTS) {
+                    throw ex;
+                }
+                long delayMs = RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)];
+                publishFor(
+                        run,
+                        STATE_FILE_STARTED,
+                        String.format(
+                                Locale.US,
+                                "%d/%d Retrying %s (%d/%d) in %d ms: %s",
+                                index,
+                                total,
+                                item.title,
+                                attempt + 1,
+                                MAX_DOWNLOAD_ATTEMPTS,
+                                delayMs,
+                                messageOf(ex)
+                        ),
+                        total,
+                        index,
+                        success,
+                        failed,
+                        item.title,
+                        ""
+                );
+                sleepWithCancellation(run, delayMs);
+            }
+        }
+        throw lastFailure == null ? new IOException("Download failed") : lastFailure;
+    }
+
+    private DownloadValidator.ValidationResult downloadAttempt(
+            BatchRun run,
             CameraContentItem item,
             File dir,
             int total,
@@ -216,76 +359,177 @@ public class DownloadService extends Service {
             throw new IllegalArgumentException("No download URL for " + item.title);
         }
 
-        String resolvedUrl = resolveBestDownloadUrl(urlText);
+        String resolvedUrl = shouldProbeLegacyFullSizeCandidate(item, urlText)
+                ? resolveBestDownloadUrl(urlText)
+                : urlText;
+        long didlExpectedSize = resolvedUrl.equals(urlText) ? item.size : -1;
         if (!resolvedUrl.equals(urlText)) {
-            publish("Using full-size candidate: " + filenameFromUrl(resolvedUrl));
+            publishFor(run, "", "Using full-size candidate: " + filenameFromUrl(resolvedUrl),
+                    0, 0, 0, 0, "", "");
         }
 
-        URL url = new URL(resolvedUrl);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setConnectTimeout(5000);
-        connection.setReadTimeout(30000);
-        connection.setRequestProperty("Accept", "*/*");
-        int code = connection.getResponseCode();
-        if (code < 200 || code >= 300) {
-            throw new IllegalStateException("HTTP " + code + " for " + urlText);
-        }
-        long contentLength = Math.max(0, connection.getContentLengthLong());
+        HttpURLConnection connection = null;
+        File partFile = null;
+        try {
+            connection = (HttpURLConnection) new URL(resolvedUrl).openConnection();
+            run.currentConnection.set(connection);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(30000);
+            setDownloadHeaders(connection);
+            int code = connection.getResponseCode();
+            if (code == HttpURLConnection.HTTP_UNAVAILABLE) {
+                throw new RetryableHttpException(code, resolvedUrl);
+            }
+            if (code < 200 || code >= 300) {
+                throw new IOException("HTTP " + code + " for " + resolvedUrl);
+            }
 
-        String filename = safeFilename(item.title);
-        if (!filename.contains(".")) {
-            filename = filename + extensionFromContentType(connection.getContentType());
-        }
-        File output = uniqueFile(dir, filename);
-        try (InputStream input = connection.getInputStream(); FileOutputStream fileOutput = new FileOutputStream(output)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
+            long contentLength = connection.getContentLengthLong();
+            String contentType = connection.getContentType();
+            String filename = safeFilename(item.title);
+            if (!filename.contains(".")) {
+                filename = filename + extensionFromContentType(contentType);
+            }
+            partFile = uniquePartFile(dir, filename);
+            long expectedResponseLength = contentLength > 0 ? contentLength : didlExpectedSize;
+            long progressTotal = Math.max(0, expectedResponseLength);
+
             long bytesDone = 0;
-            long lastBytes = 0;
-            long lastAt = System.currentTimeMillis();
-            while ((read = input.read(buffer)) != -1) {
-                if (cancelled) {
-                    throw new InterruptedException("Cancelled");
-                }
-                fileOutput.write(buffer, 0, read);
-                bytesDone += read;
-                long now = System.currentTimeMillis();
-                if (now - lastAt >= 500 || (contentLength > 0 && bytesDone >= contentLength)) {
-                    long elapsedMs = Math.max(1, now - lastAt);
-                    long bytesDelta = Math.max(0, bytesDone - lastBytes);
-                    long speedBps = bytesDelta * 1000L / elapsedMs;
-                    long etaSeconds = 0;
-                    if (contentLength > 0 && speedBps > 0) {
-                        long remainingBytes = Math.max(0, contentLength - bytesDone);
-                        etaSeconds = (long) Math.ceil(remainingBytes / (double) speedBps);
+            try (InputStream input = connection.getInputStream();
+                 FileOutputStream output = new FileOutputStream(partFile)) {
+                byte[] buffer = new byte[64 * 1024];
+                long lastBytes = 0;
+                long lastAt = System.currentTimeMillis();
+                int read;
+                while (expectedResponseLength <= 0 || bytesDone < expectedResponseLength) {
+                    int requested = buffer.length;
+                    if (expectedResponseLength > 0) {
+                        requested = (int) Math.min(buffer.length, expectedResponseLength - bytesDone);
                     }
-                    publishProgress(
-                            STATE_FILE_PROGRESS,
-                            String.format(Locale.US, "%d/%d Importing %s", index, total, item.title),
-                            total,
-                            index,
-                            success,
-                            failed,
-                            item.title,
-                            "",
-                            bytesDone,
-                            contentLength,
-                            speedBps,
-                            etaSeconds,
-                            batchBytesBeforeFile + bytesDone,
-                            elapsedSeconds(batchStartedAt)
-                    );
-                    lastAt = now;
-                    lastBytes = bytesDone;
+                    read = input.read(buffer, 0, requested);
+                    if (read == -1) {
+                        break;
+                    }
+                    throwIfCancelled(run);
+                    output.write(buffer, 0, read);
+                    bytesDone += read;
+                    long now = System.currentTimeMillis();
+                    if (now - lastAt >= 500 || (progressTotal > 0 && bytesDone >= progressTotal)) {
+                        long elapsedMs = Math.max(1, now - lastAt);
+                        long bytesDelta = Math.max(0, bytesDone - lastBytes);
+                        long speedBps = bytesDelta * 1000L / elapsedMs;
+                        long etaSeconds = 0;
+                        if (progressTotal > 0 && speedBps > 0) {
+                            etaSeconds = (long) Math.ceil(Math.max(0, progressTotal - bytesDone) / (double) speedBps);
+                        }
+                        publishFor(
+                                run,
+                                STATE_FILE_PROGRESS,
+                                String.format(Locale.US, "%d/%d Importing %s", index, total, item.title),
+                                total,
+                                index,
+                                success,
+                                failed,
+                                item.title,
+                                "",
+                                bytesDone,
+                                progressTotal,
+                                speedBps,
+                                etaSeconds,
+                                batchBytesBeforeFile + bytesDone,
+                                elapsedSeconds(batchStartedAt)
+                        );
+                        lastAt = now;
+                        lastBytes = bytesDone;
+                    }
+                }
+                output.getFD().sync();
+            }
+
+            if (partFile.length() != bytesDone) {
+                throw new EOFException("Temporary file length changed while downloading");
+            }
+            DownloadValidator.ValidationResult result = DownloadValidator.inspect(
+                    partFile,
+                    contentType,
+                    contentLength,
+                    didlExpectedSize,
+                    filename
+            );
+            throwIfCancelled(run);
+            try {
+                saveToPublicDcim(run, partFile, filename, contentType);
+            } catch (InterruptedException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                throw new PublishException("Cannot publish " + filename + ": " + messageOf(ex));
+            }
+            return result;
+        } finally {
+            if (connection != null) {
+                run.currentConnection.compareAndSet(connection, null);
+                connection.disconnect();
+            }
+            if (partFile != null && partFile.exists() && !partFile.delete()) {
+                partFile.deleteOnExit();
+            }
+        }
+    }
+
+    private void reportXPushProgress(BatchRun run, int transferred) {
+        if (run.xPushClient == null || run.xPushEnded.get()) {
+            return;
+        }
+        Exception lastFailure = null;
+        for (int attempt = 0; attempt <= XPUSH_RETRY_DELAYS_MS.length; attempt++) {
+            try {
+                run.xPushClient.transferProgress(run.xPushTotal, transferred);
+                return;
+            } catch (Exception ex) {
+                lastFailure = ex;
+                Log.w(TAG, "XPush progress attempt " + (attempt + 1) + " failed", ex);
+                if (attempt < XPUSH_RETRY_DELAYS_MS.length) {
+                    sleepProtocolRetry(XPUSH_RETRY_DELAYS_MS[attempt]);
                 }
             }
         }
-        DownloadValidator.ValidationResult result = DownloadValidator.inspect(output, connection.getContentType());
-        saveToPublicDcim(output, filename, connection.getContentType());
-        if (!output.delete()) {
-            output.deleteOnExit();
+        run.xPushProtocolFailed.set(true);
+        Log.e(TAG, "XPush progress exhausted retries", lastFailure);
+    }
+
+    private String finishXPush(BatchRun run, int errorCode) {
+        if (run.xPushClient == null || run.xPushEnded.get()) {
+            return null;
         }
-        return result;
+        int finalCode = run.xPushProtocolFailed.get() ? 1 : errorCode;
+        Exception lastFailure = null;
+        for (int attempt = 0; attempt <= XPUSH_RETRY_DELAYS_MS.length; attempt++) {
+            try {
+                run.xPushClient.transferEnd(finalCode);
+                run.xPushEnded.set(true);
+                return null;
+            } catch (Exception ex) {
+                lastFailure = ex;
+                Log.w(TAG, "XPush end attempt " + (attempt + 1) + " failed", ex);
+                if (attempt < XPUSH_RETRY_DELAYS_MS.length) {
+                    sleepProtocolRetry(XPUSH_RETRY_DELAYS_MS[attempt]);
+                }
+            }
+        }
+        run.xPushEnded.set(true);
+        return messageOf(lastFailure);
+    }
+
+    private void sleepProtocolRetry(long delayMs) {
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private String xPushFailureSuffix(String failure) {
+        return failure == null || failure.isEmpty() ? "" : " Camera transfer finalization failed: " + failure;
     }
 
     private String resolveBestDownloadUrl(String originalUrl) {
@@ -301,6 +545,21 @@ public class DownloadService extends Service {
             }
         }
         return best == null ? originalUrl : best.url;
+    }
+
+    private boolean shouldProbeLegacyFullSizeCandidate(CameraContentItem item, String selectedUrl) {
+        if (item == null || selectedUrl == null || selectedUrl.isEmpty()) {
+            return false;
+        }
+        for (SonyResourceProfile resource : item.resources) {
+            if (!selectedUrl.equals(resource.url)) {
+                continue;
+            }
+            return resource.isJpegLarge()
+                    && !resource.isOriginalProfile()
+                    && !resource.isExplicitOriginalMedia();
+        }
+        return false;
     }
 
     private List<String> fullSizeCandidates(String url) {
@@ -335,7 +594,7 @@ public class DownloadService extends Service {
             connection = (HttpURLConnection) new URL(urlText).openConnection();
             connection.setConnectTimeout(1200);
             connection.setReadTimeout(1800);
-            connection.setRequestProperty("Accept", "*/*");
+            setDownloadHeaders(connection);
             connection.setRequestProperty("Range", "bytes=0-0");
             int code = connection.getResponseCode();
             if (code < 200 || code >= 300) {
@@ -349,7 +608,7 @@ public class DownloadService extends Service {
                     try {
                         length = Long.parseLong(range.substring(slash + 1));
                     } catch (Exception ignored) {
-                        // Keep content length fallback.
+                        // Keep the Content-Length fallback.
                     }
                 }
             }
@@ -361,6 +620,13 @@ public class DownloadService extends Service {
                 connection.disconnect();
             }
         }
+    }
+
+    private void setDownloadHeaders(HttpURLConnection connection) {
+        connection.setRequestProperty("Accept", "*/*");
+        connection.setRequestProperty("Accept-Encoding", "identity");
+        connection.setRequestProperty("Connection", "close");
+        connection.setRequestProperty("User-Agent", USER_AGENT);
     }
 
     private static final class ProbeResult {
@@ -395,6 +661,54 @@ public class DownloadService extends Service {
         }
     }
 
+    private static final class BatchRun {
+        final String itemsJson;
+        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        final AtomicBoolean terminalPublished = new AtomicBoolean(false);
+        final AtomicInteger latestStartId;
+        final AtomicReference<HttpURLConnection> currentConnection = new AtomicReference<>();
+        final int xPushTotal;
+        final XPushListClient xPushClient;
+        final AtomicBoolean xPushProtocolFailed = new AtomicBoolean(false);
+        final AtomicBoolean xPushEnded = new AtomicBoolean(false);
+
+        BatchRun(
+                int startId,
+                String itemsJson,
+                String xPushControlUrl,
+                String xPushServiceType,
+                int xPushTotal
+        ) {
+            this.itemsJson = itemsJson;
+            this.latestStartId = new AtomicInteger(startId);
+            this.xPushTotal = Math.max(0, xPushTotal);
+            String controlUrl = xPushControlUrl == null ? "" : xPushControlUrl.trim();
+            this.xPushClient = controlUrl.isEmpty()
+                    ? null
+                    : new XPushListClient(controlUrl, xPushServiceType, new StringBuilder());
+        }
+
+        void cancel() {
+            cancelled.set(true);
+            HttpURLConnection connection = currentConnection.get();
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private static final class RetryableHttpException extends IOException {
+        RetryableHttpException(int statusCode, String url) {
+            super("HTTP " + statusCode + " for " + url);
+        }
+    }
+
+    private static final class PublishException extends IOException {
+        PublishException(String message) {
+            super(message);
+        }
+    }
+
     private String filenameFromUrl(String urlText) {
         try {
             String path = new URL(urlText).getPath();
@@ -405,48 +719,98 @@ public class DownloadService extends Service {
         }
     }
 
-    private void saveToPublicDcim(File source, String filename, String contentType) throws Exception {
+    private void saveToPublicDcim(BatchRun run, File source, String filename, String contentType) throws Exception {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ContentValues values = new ContentValues();
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
-            values.put(MediaStore.MediaColumns.MIME_TYPE, contentType == null ? mimeFromFilename(filename) : contentType);
+            values.put(MediaStore.MediaColumns.MIME_TYPE,
+                    contentType == null ? mimeFromFilename(filename) : contentType);
             values.put(MediaStore.MediaColumns.RELATIVE_PATH, PUBLIC_OUTPUT_DIR);
             values.put(MediaStore.MediaColumns.IS_PENDING, 1);
 
-            Uri uri = getContentResolver().insert(mediaStoreUriFor(filename, contentType), values);
-            if (uri == null) {
-                throw new IllegalStateException("Cannot create MediaStore entry for " + filename);
-            }
-            try (InputStream input = new java.io.FileInputStream(source);
-                 OutputStream output = getContentResolver().openOutputStream(uri)) {
-                if (output == null) {
-                    throw new IllegalStateException("Cannot open MediaStore output for " + filename);
+            Uri uri = null;
+            try {
+                uri = getContentResolver().insert(mediaStoreUriFor(filename, contentType), values);
+                if (uri == null) {
+                    throw new IllegalStateException("Cannot create MediaStore entry for " + filename);
                 }
-                copy(input, output);
+                long copied;
+                try (InputStream input = new FileInputStream(source);
+                     OutputStream output = getContentResolver().openOutputStream(uri)) {
+                    if (output == null) {
+                        throw new IllegalStateException("Cannot open MediaStore output for " + filename);
+                    }
+                    copied = copy(run, input, output);
+                }
+                if (copied != source.length()) {
+                    throw new EOFException("MediaStore copy mismatch: expected " + source.length() + ", wrote " + copied);
+                }
+                throwIfCancelled(run);
+                ContentValues done = new ContentValues();
+                done.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                int updated = getContentResolver().update(uri, done, null, null);
+                if (updated != 1) {
+                    throw new IllegalStateException("Cannot publish MediaStore entry for " + filename);
+                }
+                uri = null;
+                return;
+            } finally {
+                if (uri != null) {
+                    getContentResolver().delete(uri, null, null);
+                }
             }
-            ContentValues done = new ContentValues();
-            done.put(MediaStore.MediaColumns.IS_PENDING, 0);
-            getContentResolver().update(uri, done, null, null);
-            return;
         }
 
-        File publicDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Sony Picture");
+        File publicDir = new File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                "Sony Picture"
+        );
         if (!publicDir.exists() && !publicDir.mkdirs()) {
             throw new IllegalStateException("Cannot create " + publicDir);
         }
         File outputFile = uniqueFile(publicDir, filename);
-        try (InputStream input = new java.io.FileInputStream(source);
-             OutputStream output = new FileOutputStream(outputFile)) {
-            copy(input, output);
+        File outputPart = uniqueFile(publicDir, outputFile.getName() + ".part");
+        try {
+            long copied;
+            try (InputStream input = new FileInputStream(source);
+                 OutputStream output = new FileOutputStream(outputPart)) {
+                copied = copy(run, input, output);
+            }
+            if (copied != source.length()) {
+                throw new EOFException("Public file copy mismatch: expected " + source.length() + ", wrote " + copied);
+            }
+            throwIfCancelled(run);
+            if (!outputPart.renameTo(outputFile)) {
+                throw new IOException("Cannot publish " + outputFile);
+            }
+        } finally {
+            if (outputPart.exists() && !outputPart.delete()) {
+                outputPart.deleteOnExit();
+            }
         }
     }
 
-    private void copy(InputStream input, OutputStream output) throws Exception {
+    private long copy(BatchRun run, InputStream input, OutputStream output) throws Exception {
         byte[] buffer = new byte[64 * 1024];
+        long copied = 0;
         int read;
         while ((read = input.read(buffer)) != -1) {
+            throwIfCancelled(run);
             output.write(buffer, 0, read);
+            copied += read;
         }
+        output.flush();
+        return copied;
+    }
+
+    private File uniquePartFile(File dir, String filename) throws IOException {
+        for (int i = 0; i < 10; i++) {
+            File candidate = new File(dir, UUID.randomUUID() + "-" + filename + ".part");
+            if (candidate.createNewFile()) {
+                return candidate;
+            }
+        }
+        throw new IOException("Cannot create a unique partial file for " + filename);
     }
 
     private File uniqueFile(File dir, String filename) {
@@ -478,7 +842,7 @@ public class DownloadService extends Service {
         if (lower.contains("jpeg") || lower.contains("jpg")) {
             return ".jpg";
         }
-        if (lower.contains("tiff")) {
+        if (lower.contains("tiff") || lower.contains("arw")) {
             return ".arw";
         }
         return ".bin";
@@ -504,12 +868,139 @@ public class DownloadService extends Service {
         return MediaStore.Downloads.EXTERNAL_CONTENT_URI;
     }
 
-    private void publish(String message) {
-        publishProgress("", message, 0, 0, 0, 0, "", "");
+    private boolean isRetryable(Exception exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof PublishException) {
+                return false;
+            }
+            if (current instanceof RetryableHttpException
+                    || current instanceof SocketTimeoutException
+                    || current instanceof EOFException) {
+                return true;
+            }
+            if (current instanceof DownloadValidator.ValidationException
+                    && ((DownloadValidator.ValidationException) current).isTruncated()) {
+                return true;
+            }
+            if (current instanceof SocketException || current instanceof IOException) {
+                String message = current.getMessage();
+                String lower = message == null ? "" : message.toLowerCase(Locale.US);
+                if (lower.contains("connection reset")
+                        || lower.contains("unexpected eof")
+                        || lower.contains("unexpected end of stream")
+                        || lower.contains("premature eof")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void sleepWithCancellation(BatchRun run, long delayMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + delayMs;
+        while (true) {
+            throwIfCancelled(run);
+            long remaining = deadline - System.currentTimeMillis();
+            if (remaining <= 0) {
+                return;
+            }
+            Thread.sleep(Math.min(remaining, 100));
+        }
+    }
+
+    private void throwIfCancelled(BatchRun run) throws InterruptedException {
+        if (run.cancelled.get() || !isCurrent(run)) {
+            throw new InterruptedException("Cancelled");
+        }
+    }
+
+    private boolean isCurrent(BatchRun run) {
+        return activeBatch.get() == run;
+    }
+
+    private String messageOf(Throwable throwable) {
+        String message = throwable == null ? null : throwable.getMessage();
+        return message == null || message.trim().isEmpty()
+                ? throwable == null ? "Unknown error" : throwable.getClass().getSimpleName()
+                : message;
+    }
+
+    private void publishTerminal(
+            BatchRun run,
+            String state,
+            String message,
+            int total,
+            int index,
+            int success,
+            int failed,
+            long batchBytesDone,
+            long startedAt
+    ) {
+        if (!isCurrent(run) || !run.terminalPublished.compareAndSet(false, true)) {
+            return;
+        }
+        publishProgress(
+                state,
+                message,
+                total,
+                index,
+                success,
+                failed,
+                "",
+                "",
+                0,
+                0,
+                averageBytesPerSecond(batchBytesDone, startedAt),
+                0,
+                batchBytesDone,
+                elapsedSeconds(startedAt)
+        );
+    }
+
+    private void publishFor(
+            BatchRun run,
+            String state,
+            String message,
+            int total,
+            int index,
+            int success,
+            int failed,
+            String filename,
+            String itemJson
+    ) {
+        publishFor(run, state, message, total, index, success, failed, filename, itemJson,
+                0, 0, 0, 0, 0, 0);
+    }
+
+    private void publishFor(
+            BatchRun run,
+            String state,
+            String message,
+            int total,
+            int index,
+            int success,
+            int failed,
+            String filename,
+            String itemJson,
+            long bytesDone,
+            long bytesTotal,
+            long speedBps,
+            long etaSeconds,
+            long batchBytesDone,
+            long elapsedSeconds
+    ) {
+        if (!isCurrent(run) || run.terminalPublished.get()) {
+            return;
+        }
+        publishProgress(state, message, total, index, success, failed, filename, itemJson,
+                bytesDone, bytesTotal, speedBps, etaSeconds, batchBytesDone, elapsedSeconds);
     }
 
     private void publishProgress(String state, String message, int total, int index, int success, int failed, String filename, String itemJson) {
-        publishProgress(state, message, total, index, success, failed, filename, itemJson, 0, 0, 0, 0, 0, 0);
+        publishProgress(state, message, total, index, success, failed, filename, itemJson,
+                0, 0, 0, 0, 0, 0);
     }
 
     private void publishProgress(
@@ -528,6 +1019,10 @@ public class DownloadService extends Service {
             long batchBytesDone,
             long elapsedSeconds
     ) {
+        if (!STATE_FILE_PROGRESS.equals(state)) {
+            Log.d(TAG, state + " index=" + index + "/" + total + " success=" + success
+                    + " failed=" + failed + " message=" + message);
+        }
         Intent intent = new Intent(ACTION_PROGRESS);
         intent.setPackage(getPackageName());
         intent.putExtra(EXTRA_MESSAGE, message);

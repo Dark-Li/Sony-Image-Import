@@ -55,6 +55,7 @@ class ComposeMainActivity : ComponentActivity() {
                 onDownloadPreview = viewModel::downloadPreview,
                 onCancelDownloads = viewModel::cancelDownloads,
                 onRetryFailed = viewModel::retryFailed,
+                onReceiveCameraSelection = viewModel::receiveCameraSelection,
                 onOpenGallery = ::openGallery,
                 onClearLogs = viewModel::clearLogs
             )

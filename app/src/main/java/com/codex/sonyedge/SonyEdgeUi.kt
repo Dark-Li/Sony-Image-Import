@@ -183,6 +183,7 @@ fun SonyEdgeApp(
     onDownloadPreview: () -> Unit,
     onCancelDownloads: () -> Unit,
     onRetryFailed: () -> Unit,
+    onReceiveCameraSelection: () -> Unit,
     onOpenGallery: () -> Unit,
     onClearLogs: () -> Unit
 ) {
@@ -249,6 +250,7 @@ fun SonyEdgeApp(
                                 SonyEdgeTab.Settings -> SettingsScreen(
                                     state = state,
                                     onConnect = onConnect,
+                                    onReceiveCameraSelection = onReceiveCameraSelection,
                                     onOpenGallery = onOpenGallery,
                                     onClearLogs = onClearLogs
                                 )
@@ -755,7 +757,13 @@ private fun TransferMetric(label: String, value: String, modifier: Modifier = Mo
 }
 
 @Composable
-private fun SettingsScreen(state: SonyEdgeUiState, onConnect: () -> Unit, onOpenGallery: () -> Unit, onClearLogs: () -> Unit) {
+private fun SettingsScreen(
+    state: SonyEdgeUiState,
+    onConnect: () -> Unit,
+    onReceiveCameraSelection: () -> Unit,
+    onOpenGallery: () -> Unit,
+    onClearLogs: () -> Unit
+) {
     var diagnosticsExpanded by remember { mutableStateOf(false) }
     val connectionText = when (state.connectionState) {
         ConnectionState.Connected -> "Camera service is ready."
@@ -779,6 +787,22 @@ private fun SettingsScreen(state: SonyEdgeUiState, onConnect: () -> Unit, onOpen
                 onConnect,
                 Modifier.fillMaxWidth(),
                 primary = true
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        InfoPanel(
+            title = "Camera-selected photos",
+            message = state.cameraSelectionStatus,
+            icon = Icons.Default.PhotoLibrary,
+            tone = SurfaceSoft,
+            iconTint = SonyBlue
+        ) {
+            ToolbarButton(
+                "Receive camera selection",
+                Icons.Default.CloudDownload,
+                onReceiveCameraSelection,
+                Modifier.fillMaxWidth(),
+                primary = false
             )
         }
         Spacer(Modifier.height(10.dp))

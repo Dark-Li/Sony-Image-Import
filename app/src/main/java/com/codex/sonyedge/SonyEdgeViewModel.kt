@@ -3,10 +3,7 @@ package com.codex.sonyedge
 import android.app.Application
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.net.wifi.WifiManager
-import android.os.Build
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.LinkedHashSet
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 enum class SonyEdgeTab {
     Library,
@@ -71,7 +69,8 @@ data class SonyEdgeUiState(
     val downloadBatchBytesDone: Long = 0,
     val downloadElapsedSeconds: Long = 0,
     val transferEvents: List<String> = emptyList(),
-    val failedItems: List<CameraContentItem> = emptyList()
+    val failedItems: List<CameraContentItem> = emptyList(),
+    val cameraSelectionStatus: String = "Choose photos on the camera, then receive them here."
 ) {
     val shouldHandleBack: Boolean
         get() = previewIndex != null ||
@@ -86,12 +85,17 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow(SonyEdgeUiState())
     val uiState: StateFlow<SonyEdgeUiState> = _uiState
 
-    private var activeService: DmsServiceInfo? = null
+    private var activeSession: SonyCameraSession? = null
+    private var activeXPushSession: CameraSelectionSession? = null
+    private val pendingXPushGuard = AtomicReference<XPushSessionGuard?>()
+    private val cleared = AtomicBoolean(false)
     private val folderCache = linkedMapOf<String, CachedFolder>()
     private var browseRequestId = 0
 
     override fun onCleared() {
+        cleared.set(true)
         scope.cancel()
+        pendingXPushGuard.getAndSet(null)?.let { abortXPushGuard(it, "ViewModel cleared") }
         super.onCleared()
     }
 
@@ -117,10 +121,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         scope.launch {
             runCatching {
                 repository.connect { addLog(it) }
-            }.onSuccess { service ->
-                activeService = service
-                repository.saveCachedEndpoint(service.controlUrl)
-                addLog("Connected: ${service.controlUrl}")
+            }.onSuccess { session ->
+                activeSession = session
+                addLog("Connected: ${session.device.friendlyName} ${session.device.modelName}")
                 _uiState.update { it.copy(connectionState = ConnectionState.Connected, errorMessage = null) }
                 openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
             }.onFailure { ex ->
@@ -169,12 +172,11 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         preferCache: Boolean = true,
         autoOpenDateDirectory: Boolean = false
     ) {
-        val service = activeService ?: repository.cachedService()
-        if (service.controlUrl.isNullOrBlank()) {
+        val session = activeSession
+        if (session == null) {
             setError("Connect to the camera Wi-Fi first.", SonyEdgeTab.Camera)
             return
         }
-        activeService = service
         val previousState = _uiState.value
         val cleanTitle = cleanTitle(title, id)
         val requestId = ++browseRequestId
@@ -225,7 +227,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         }
         scope.launch {
             runCatching {
-                repository.browse(service, id) { addLog(it) }
+                repository.browse(session, id) { addLog(it) }
             }.onSuccess { result ->
                 if (requestId != browseRequestId) return@launch
                 val cached = CachedFolder(id, cleanTitle, result.containers, result.items)
@@ -366,21 +368,99 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         startDownload(_uiState.value.failedItems)
     }
 
+    fun receiveCameraSelection() {
+        val session = activeSession
+        if (session == null) {
+            setError("Connect to the camera Wi-Fi first.", SonyEdgeTab.Settings)
+            return
+        }
+        setLoading("Waiting for the camera selection...", SonyEdgeTab.Settings)
+        _uiState.update { it.copy(cameraSelectionStatus = "Reading the camera-selected transfer list...") }
+        scope.launch {
+            runCatching {
+                repository.startCameraSelection(
+                    session,
+                    { addLog(it) },
+                    ::registerXPushGuard
+                )
+            }.onSuccess { selection ->
+                activeXPushSession = selection
+                browseRequestId++
+                val title = "Camera selection"
+                val cached = CachedFolder(selection.pushRoot, title, emptyList(), selection.items)
+                folderCache[selection.pushRoot] = cached
+                _uiState.update {
+                    it.copy(
+                        activeTab = SonyEdgeTab.Library,
+                        connectionState = ConnectionState.Connected,
+                        status = "Received ${selection.items.size} camera-selected items.",
+                        errorMessage = null,
+                        loading = false,
+                        currentFolderId = selection.pushRoot,
+                        currentFolderTitle = title,
+                        folders = emptyList(),
+                        photos = selection.items,
+                        selectedKeys = selection.items.mapTo(linkedSetOf()) { item -> itemKey(item) },
+                        previewIndex = null,
+                        cameraSelectionStatus = "${selection.items.size} items received and selected for import."
+                    )
+                }
+                startDownload(selection.items)
+            }.onFailure { ex ->
+                pendingXPushGuard.getAndSet(null)?.let {
+                    abortXPushGuard(it, "Camera selection failed after setup cleanup")
+                }
+                _uiState.update { it.copy(cameraSelectionStatus = "Camera selection failed: ${ex.message}") }
+                setError("Camera selection failed: ${ex.message}", SonyEdgeTab.Settings)
+            }
+        }
+    }
+
     fun cancelDownloads() {
         getApplication<Application>().startService(Intent(getApplication(), DownloadService::class.java).apply {
             action = DownloadService.ACTION_CANCEL
         })
     }
 
-    private fun startDownload(items: List<CameraContentItem>) {
-        if (items.isEmpty()) return
+    private fun startDownload(requestedItems: List<CameraContentItem>) {
+        if (requestedItems.isEmpty()) return
+        val selection = activeXPushSession
+        val pushKeys = selection?.items?.mapTo(hashSetOf()) { itemKey(it) }.orEmpty()
+        val usesCameraSelection = pushKeys.isNotEmpty() && requestedItems.any { itemKey(it) in pushKeys }
+        val items = if (usesCameraSelection) selection!!.items else requestedItems
         val array = JSONArray()
         items.forEach { array.put(it.toJson()) }
         val intent = Intent(getApplication(), DownloadService::class.java).apply {
             action = DownloadService.ACTION_START
             putExtra(DownloadService.EXTRA_ITEMS, array.toString())
+            if (usesCameraSelection) {
+                putExtra(DownloadService.EXTRA_XPUSH_CONTROL_URL, selection!!.controlUrl)
+                putExtra(DownloadService.EXTRA_XPUSH_SERVICE_TYPE, selection.serviceType)
+                putExtra(DownloadService.EXTRA_XPUSH_TOTAL, selection.items.size)
+            }
         }
-        getApplication<Application>().startService(intent)
+        try {
+            if (usesCameraSelection) {
+                val guard = selection!!.guard
+                if (!guard.handoffToService {
+                        getApplication<Application>().startService(intent)
+                    }) {
+                    throw IllegalStateException("Camera-selected transfer session is no longer active")
+                }
+                pendingXPushGuard.compareAndSet(guard, null)
+                activeXPushSession = null
+            } else {
+                getApplication<Application>().startService(intent)
+            }
+        } catch (ex: Exception) {
+            if (usesCameraSelection) {
+                val guard = selection!!.guard
+                pendingXPushGuard.compareAndSet(guard, null)
+                abortXPushGuard(guard, "Download service handoff failed")
+            }
+            setError("Unable to start import: ${ex.message}", SonyEdgeTab.Transfers)
+            return
+        }
         _uiState.update {
             it.copy(
                 activeTab = SonyEdgeTab.Transfers,
@@ -480,7 +560,27 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
 
     private fun addLog(message: String) {
         if (message.isBlank()) return
+        Log.d("SonyEdge-Flow", message)
         _uiState.update { it.copy(logs = (listOf(message) + it.logs).take(160)) }
+    }
+
+    private fun registerXPushGuard(guard: XPushSessionGuard) {
+        if (cleared.get()) {
+            abortXPushGuard(guard, "ViewModel already cleared")
+            return
+        }
+        pendingXPushGuard.getAndSet(guard)?.let { previous ->
+            if (previous !== guard) abortXPushGuard(previous, "Superseded by a new camera selection")
+        }
+        if (cleared.get() && pendingXPushGuard.compareAndSet(guard, null)) {
+            abortXPushGuard(guard, "ViewModel cleared during camera selection")
+        }
+    }
+
+    private fun abortXPushGuard(guard: XPushSessionGuard, reason: String) {
+        XPushCleanupCoordinator.schedule(guard, reason) { message ->
+            Log.w("SonyEdge-XPush", message)
+        }
     }
 
     companion object {
@@ -494,43 +594,185 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 }
 
+data class SonyCameraSession(
+    val device: SonyDeviceDescription,
+    val dmsService: DmsServiceInfo?,
+    val scalarClient: SonyRpcClient?
+)
+
+data class CameraSelectionSession(
+    val client: XPushListClient,
+    val pushRoot: String,
+    val items: List<CameraContentItem>,
+    val protocolLog: StringBuilder,
+    val controlUrl: String,
+    val serviceType: String,
+    val guard: XPushSessionGuard
+)
+
 class SonyCameraRepository(private val context: Context) {
-    suspend fun connect(log: (String) -> Unit): DmsServiceInfo = withContext(Dispatchers.IO) {
-        bindProcessToWifi(context)
-        val builder = StringBuilder()
-        val hosts = LinkedHashSet<String>()
-        wifiGateway(context)?.let { hosts.add(it) }
-        hosts.add("192.168.122.1")
-        val service = DiscoveryClient(context).discoverFirstDmsService(hosts, builder)
-            ?: throw IllegalStateException("No camera DMS service found")
-        builder.lines().filter { it.isNotBlank() }.takeLast(12).forEach(log)
-        service
+    private var discoveryClient = DiscoveryClient(context)
+
+    suspend fun connect(log: (String) -> Unit): SonyCameraSession = withContext(Dispatchers.IO) {
+        withWifiNetwork(context, log) {
+            var devices = discoverAndLog(discoveryClient, log)
+            var device = chooseDevice(devices)
+                ?: throw IllegalStateException("No Sony camera services discovered over SSDP")
+            var session = sessionFor(device, log)
+
+            if (session.dmsService == null) {
+                val rpc = session.scalarClient
+                val cameraApis = rpc?.let { availableApis(it, "camera", log) }.orEmpty()
+                if (rpc != null && cameraApis.contains("setCameraFunction")) {
+                    log("ContentDirectory is absent; entering Contents Transfer through ScalarWebAPI")
+                    rpc.setContentsTransferModeIfAvailable(cameraApis)
+                    discoveryClient = DiscoveryClient(context)
+                    devices = discoverAndLog(discoveryClient, log)
+                    device = devices.firstOrNull { candidate ->
+                        device.udn.isNotBlank() && candidate.udn == device.udn
+                    } ?: chooseDevice(devices) ?: device
+                    session = sessionFor(device, log)
+                }
+            }
+
+            val scalarCanBrowse = session.scalarClient
+                ?.let { availableApis(it, "avContent", log) }
+                ?.contains("getContentList") == true
+            if (session.dmsService == null && !scalarCanBrowse) {
+                throw IllegalStateException("Camera exposes neither ContentDirectory nor Scalar getContentList")
+            }
+            session
+        }
     }
 
-    suspend fun browse(service: DmsServiceInfo, folderId: String, log: (String) -> Unit): DmsBrowseResult =
+    suspend fun browse(session: SonyCameraSession, folderId: String, log: (String) -> Unit): DmsBrowseResult =
         withContext(Dispatchers.IO) {
-            bindProcessToWifi(context)
-            val builder = StringBuilder()
-            val result = DmsContentClient(service, builder).browseDirectChildren(folderId)
-            builder.lines().filter { it.isNotBlank() }.takeLast(8).forEach(log)
-            result
+            withWifiNetwork(context, log) {
+                val builder = StringBuilder()
+                val dms = session.dmsService
+                val result = if (dms != null) {
+                    DmsContentClient(dms, builder).browseDirectChildren(folderId)
+                } else {
+                    if (folderId != "0") {
+                        throw IllegalArgumentException("Scalar fallback exposes a flat camera library only")
+                    }
+                    val rpc = session.scalarClient
+                        ?: throw IllegalStateException("ScalarWebAPI service is unavailable")
+                    val matrix = CapabilityMatrix()
+                    DmsBrowseResult("0").apply {
+                        items.addAll(rpc.discoverContent(builder, matrix))
+                        numberReturned = items.size
+                        totalMatches = items.size
+                    }
+                }
+                flushLog(builder, log)
+                result
+            }
         }
 
-    fun cachedService(): DmsServiceInfo = DmsServiceInfo.cached(loadCachedEndpoint())
-
-    fun saveCachedEndpoint(url: String?) {
-        if (!url.isNullOrBlank()) {
-            context.getSharedPreferences("sonyedge", Context.MODE_PRIVATE)
-                .edit()
-                .putString("dms_control_url", url)
-                .apply()
+    suspend fun startCameraSelection(
+        session: SonyCameraSession,
+        log: (String) -> Unit,
+        onStarted: (XPushSessionGuard) -> Unit
+    ): CameraSelectionSession = withContext(Dispatchers.IO) {
+        withWifiNetwork(context, log) {
+            val xPush = session.device.services.firstOrNull { it.isXPushList() && it.controlUrl.isNotBlank() }
+                ?: throw IllegalStateException("Camera does not advertise XPushList")
+            val dms = session.dmsService
+                ?: throw IllegalStateException("Camera-selected transfer requires ContentDirectory")
+            val builder = StringBuilder()
+            val client = XPushListClient(xPush.controlUrl, xPush.serviceType, builder)
+            var guard: XPushSessionGuard? = null
+            try {
+                val start = client.transferStart()
+                if (start.errorCode != 0) {
+                    throw IllegalStateException("X_TransferStart returned ${start.errorCode}")
+                }
+                guard = XPushSessionGuard(context, client)
+                onStarted(guard)
+                val pushRoot = client.getPushRoot()
+                if (pushRoot.isBlank()) {
+                    throw IllegalStateException("X_GetPushRoot returned an empty object ID")
+                }
+                val result = DmsContentClient(dms, builder)
+                    .browseDirectChildren(pushRoot)
+                if (result.items.isEmpty()) {
+                    throw IllegalStateException("Camera push list contains no downloadable items")
+                }
+                flushLog(builder, log)
+                CameraSelectionSession(
+                    client,
+                    pushRoot,
+                    result.items,
+                    builder,
+                    xPush.controlUrl,
+                    xPush.serviceType,
+                    guard
+                )
+            } catch (ex: Throwable) {
+                flushLog(builder, log)
+                guard?.let {
+                    XPushCleanupCoordinator.schedule(it, "Camera selection setup failed", log)
+                }
+                throw ex
+            }
         }
     }
 
-    private fun loadCachedEndpoint(): String =
-        context.getSharedPreferences("sonyedge", Context.MODE_PRIVATE)
-            .getString("dms_control_url", "")
-            .orEmpty()
+    private fun discoverAndLog(client: DiscoveryClient, log: (String) -> Unit): List<SonyDeviceDescription> {
+        val builder = StringBuilder()
+        val devices = client.discoverDevices(builder)
+        flushLog(builder, log)
+        devices.forEach { device ->
+            log("Device friendly=${device.friendlyName.ifBlank { "<unknown>" }} " +
+                "model=${device.modelName.ifBlank { "<unknown>" }} udn=${device.udn.ifBlank { "<unknown>" }} " +
+                "location=${device.location}")
+            device.services.forEach { service ->
+                log(
+                    "Service type=${service.serviceType.ifBlank { service.apiType }} " +
+                        "control=${service.controlUrl.ifBlank { "<none>" }} " +
+                        "scpd=${service.scpdUrl.ifBlank { "<none>" }} " +
+                        "event=${service.eventSubUrl.ifBlank { "<none>" }} " +
+                        "actionList=${service.actionListUrl.ifBlank { "<none>" }}"
+                )
+            }
+        }
+        return devices
+    }
+
+    private fun chooseDevice(devices: List<SonyDeviceDescription>): SonyDeviceDescription? =
+        devices.maxByOrNull { device: SonyDeviceDescription ->
+            device.services.fold(0) { score: Int, service: SonyServiceDescription ->
+                score + when {
+                    service.isContentDirectory() -> 8
+                    service.isXPushList() -> 4
+                    service.isScalarWebApi() -> 2
+                    else -> 0
+                }
+            }
+        }
+
+    private fun sessionFor(device: SonyDeviceDescription, log: (String) -> Unit): SonyCameraSession {
+        val contentDirectory = device.services.firstOrNull {
+            it.isContentDirectory() && it.controlUrl.isNotBlank()
+        }?.let { DmsServiceInfo(device, it) }
+        val scalar = runCatching { SonyRpcClient(device) }
+            .onFailure { log("ScalarWebAPI unavailable: ${it.message}") }
+            .getOrNull()
+        return SonyCameraSession(device, contentDirectory, scalar)
+    }
+
+    private fun availableApis(client: SonyRpcClient, service: String, log: (String) -> Unit): List<String> {
+        val builder = StringBuilder()
+        val result = client.safeGetAvailableApiList(service, builder)
+        flushLog(builder, log)
+        return result
+    }
+
+    private fun flushLog(builder: StringBuilder, log: (String) -> Unit) {
+        builder.lines().filter { it.isNotBlank() }.forEach(log)
+        builder.setLength(0)
+    }
 }
 
 fun itemKey(item: CameraContentItem): String =
@@ -551,32 +793,17 @@ fun formatBytes(bytes: Long): String {
     return if (mb >= 1) String.format("%.1f MB", mb) else "${(bytes / 1024).coerceAtLeast(1)} KB"
 }
 
-fun bindProcessToWifi(context: Context) {
-    if (Build.VERSION.SDK_INT < 23) return
+private inline fun <T> withWifiNetwork(context: Context, log: (String) -> Unit, block: () -> T): T {
+    var lease: CameraWifiBinding.Lease? = null
     try {
-        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val wifiNetwork = manager.allNetworks.firstOrNull { network ->
-            val capabilities = manager.getNetworkCapabilities(network)
-            capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-        }
-        if (wifiNetwork != null) {
-            manager.bindProcessToNetwork(wifiNetwork)
-        }
-    } catch (_: Exception) {
+        lease = CameraWifiBinding.acquire(context)
+        log("Acquired protocol Wi-Fi lease ${lease.network}")
+        return block()
+    } catch (ex: Exception) {
+        log("Wi-Fi protocol task failed: ${ex.message ?: ex}")
+        throw ex
+    } finally {
+        lease?.close()
+        log("Released protocol Wi-Fi lease")
     }
 }
-
-private fun wifiGateway(context: Context): String? =
-    try {
-        val manager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val gateway = manager.dhcpInfo?.gateway ?: 0
-        if (gateway == 0) null else String.format(
-            "%d.%d.%d.%d",
-            gateway and 0xff,
-            gateway shr 8 and 0xff,
-            gateway shr 16 and 0xff,
-            gateway shr 24 and 0xff
-        )
-    } catch (_: Exception) {
-        null
-    }
