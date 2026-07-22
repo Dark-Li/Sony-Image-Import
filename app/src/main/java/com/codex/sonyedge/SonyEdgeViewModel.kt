@@ -153,13 +153,17 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun handleBack() {
+        backFromCameraContent()
+    }
+
+    fun backFromCameraContent() {
         val state = _uiState.value
         when {
             state.previewIndex != null -> closePreview()
             state.selectedKeys.isNotEmpty() -> clearSelection()
-            isConnectedCameraBrowsing(state) -> returnToConnectionHome()
+            isConnectedCameraBrowsing(state) -> restoreDateDirectoryOrConnectionHome(state)
             state.activeTab != browseTabFor(state) -> selectTab(SonyEdgeTab.Library)
-            state.folderStack.isNotEmpty() -> goBack()
+            state.folderStack.isNotEmpty() -> restorePreviousFolder(state)
         }
     }
 
@@ -614,11 +618,19 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun goBack() {
-        val state = _uiState.value
-        if (isConnectedCameraBrowsing(state)) {
+        backFromCameraContent()
+    }
+
+    private fun restoreDateDirectoryOrConnectionHome(state: SonyEdgeUiState) {
+        val parent = state.folderStack.lastOrNull()
+        if (parent?.title.equals("Date", ignoreCase = true)) {
+            restorePreviousFolder(state)
+        } else {
             returnToConnectionHome()
-            return
         }
+    }
+
+    private fun restorePreviousFolder(state: SonyEdgeUiState) {
         val previous = state.folderStack.lastOrNull() ?: return
         val nextStack = state.folderStack.dropLast(1)
         val cached = folderCache[previous.id]

@@ -481,8 +481,6 @@ private fun LibraryScreen(
                     subtitle = "${state.photos.size} items  /  ${state.selectedKeys.size} selected",
                     leading = titleLeading
                 )
-                Spacer(Modifier.height(2.dp))
-                PathStrip(folderPath(state))
                 state.errorMessage?.let {
                     Spacer(Modifier.height(8.dp))
                     InlineErrorCard(it, onConnectCurrentWifi)
@@ -975,8 +973,6 @@ private fun CameraScreen(
         } else if (state.folders.isEmpty()) {
             EmptyState("No albums loaded", "Connect to the camera Wi-Fi and browse the card.", "Connect camera", onConnect, state.loading)
         } else {
-            FolderSummary(state)
-            Spacer(Modifier.height(10.dp))
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(280.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -986,22 +982,6 @@ private fun CameraScreen(
                 items(state.folders, key = { it.id }) { folder ->
                     FolderRow(folder, enabled = !state.loading, onOpen = onOpenFolder)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FolderSummary(state: SonyEdgeUiState) {
-    Surface(color = Color.White, shape = RoundedCornerShape(8.dp)) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(state.currentFolderTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(folderSummarySubtitle(state), color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CountChip("${state.folders.size} folders")
-                CountChip("${state.photos.size} items")
             }
         }
     }
@@ -1400,21 +1380,6 @@ private fun formatDuration(seconds: Long): String {
 }
 
 @Composable
-private fun PathStrip(path: String) {
-    Surface(
-        color = SurfaceBg,
-        contentColor = TextMuted,
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 0.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(14.dp), tint = SonyBlue)
-            Spacer(Modifier.width(5.dp))
-            Text(path, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
-        }
-    }
-}
-
-@Composable
 private fun InfoPanel(
     title: String,
     message: String,
@@ -1668,26 +1633,6 @@ private fun PhotoTile(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(34.dp)
-                .background(Color.Black.copy(alpha = 0.58f))
-        ) {
-            Text(
-                item.title.substringBeforeLast('.', item.title),
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 8.dp, vertical = 7.dp),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 10.sp
-            )
-        }
-
         if (selectionMode || selected) {
             Box(
                 modifier = Modifier
@@ -1748,13 +1693,6 @@ private fun FolderRow(folder: DmsContainerItem, enabled: Boolean, onOpen: (DmsCo
             }
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = TextMuted)
         }
-    }
-}
-
-@Composable
-private fun CountChip(text: String) {
-    Surface(shape = RoundedCornerShape(8.dp), color = SonyBlueSoft, contentColor = SonyBlueDark) {
-        Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -2387,25 +2325,6 @@ private fun isDecodableStillUrl(url: String): Boolean {
         lower.contains("image/jpeg") ||
         lower.contains("image%2fjpeg")
 }
-
-private fun folderPath(state: SonyEdgeUiState): String {
-    val parts = (state.folderStack.map { it.title } + state.currentFolderTitle)
-        .map { it.trim() }
-        .filter { it.isNotBlank() }
-        .filterNot { it == "Camera" && state.currentFolderTitle == "Camera" && state.folderStack.isEmpty() }
-    val normalized = mutableListOf<String>()
-    for (part in parts) {
-        if (normalized.lastOrNull() != part) normalized += part
-    }
-    return normalized.ifEmpty { listOf("Camera") }.joinToString(" / ")
-}
-
-private fun folderSummarySubtitle(state: SonyEdgeUiState): String =
-    if (state.folderStack.isEmpty() && state.currentFolderTitle == "Camera") {
-        "Card root"
-    } else {
-        folderPath(state)
-    }
 
 private fun isVideoItem(item: CameraContentItem): Boolean {
     val title = item.title.lowercase()

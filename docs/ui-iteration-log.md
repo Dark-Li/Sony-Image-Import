@@ -398,3 +398,20 @@
   - `build/device-screenshots/sonyedge-v011-reset-swipe.png`
   - `build/device-screenshots/sonyedge-v012-zoom-pan.png`
   - `build/device-screenshots/sonyedge-v012-reset-swipe.png`
+
+## 2026-07-22 Camera Browse Navigation Cleanup
+
+### Implemented in this iteration
+- Back from a single-day photo grid now restores the cached `Date` folder list.
+- Back from the `Date` list returns to the connected camera home without exposing the internal `Camera` or `PhotoRoot` containers.
+- Removed the duplicate folder summary row from the `Date` list.
+- Removed the protocol breadcrumb from a single-day photo grid.
+- Removed filename overlays from photo thumbnails while retaining tap-to-preview and selection behavior.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.4`, `versionCode=36`.
+- Installed successfully on ADB device `909e29e1` and connected to `DIRECT-leE1:ILCE-7RM3` at `192.168.122.1`.
+- Confirmed both the Android system Back action and the page toolbar Back action return from `2026-7-21` to `Date`.
+- Confirmed both Back paths return from `Date` to the connected camera home.
+- Confirmed the `Date` page has one summary only, and the 37-photo page has no breadcrumb or filename overlays.
+- Opened `DSC06913.JPG` from the cleaned thumbnail grid to verify preview navigation remains available.

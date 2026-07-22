@@ -49,7 +49,7 @@ class ComposeMainActivity : ComponentActivity() {
                 onBrowseCameraPhotos = viewModel::browseCameraPhotos,
                 onOpenImportsFromHome = viewModel::openImportsFromHome,
                 onRefresh = viewModel::refresh,
-                onBack = viewModel::returnToConnectionHome,
+                onBack = viewModel::backFromCameraContent,
                 onOpenFolder = viewModel::openFolder,
                 onPreview = viewModel::showPreview,
                 onClosePreview = viewModel::closePreview,
