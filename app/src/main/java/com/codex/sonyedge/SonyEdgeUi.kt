@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.util.Log
 import android.util.LruCache
 import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
@@ -1382,10 +1383,7 @@ private fun PhotoPreview(
                 for (index in start..end) {
                     val item = items[index]
                     if (!isVideoItem(item)) {
-                        loadBitmap(context, item.previewUrl(), 900)
-                        if (index == page || index == page + 1) {
-                            loadBitmap(context, previewPrimaryUrl(item), 2400)
-                        }
+                        loadBitmap(context, previewFallbackUrl(item), 900)
                     }
                 }
             }
@@ -1406,7 +1404,7 @@ private fun PhotoPreview(
                     } else {
                         ProgressiveCameraImage(
                             primaryUrl = previewPrimaryUrl(frameItem),
-                            fallbackUrl = frameItem.previewUrl(),
+                            fallbackUrl = previewFallbackUrl(frameItem),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit,
                             maxDimension = 2400,
@@ -1774,6 +1772,10 @@ private suspend fun loadBitmap(context: Context, url: String, maxDimension: Int)
         connection.setRequestProperty("Accept", "image/*,*/*")
         if (connection.responseCode !in 200..299) return@withContext null
         val bytes = connection.inputStream.use { it.readBytes() }
+        Log.d(
+            "SonyEdge-Preview",
+            "Loaded ${bytes.size} bytes from ${url.substringBefore('?')}"
+        )
         if (bytes.isNotEmpty()) {
             runCatching {
                 diskFile.parentFile?.mkdirs()
@@ -1884,11 +1886,15 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 private fun previewPrimaryUrl(item: CameraContentItem): String {
-    val original = item.originalUrl.orEmpty()
-    if (isDecodableStillUrl(original)) return original
-    val large = item.largeUrl.orEmpty()
+    val large = item.fullPreviewUrl().orEmpty()
     if (isDecodableStillUrl(large)) return large
-    return item.previewUrl()
+    return previewFallbackUrl(item)
+}
+
+private fun previewFallbackUrl(item: CameraContentItem): String {
+    val thumbnail = item.previewThumbnailUrl().orEmpty()
+    if (isDecodableStillUrl(thumbnail)) return thumbnail
+    return ""
 }
 
 private fun isDecodableStillUrl(url: String): Boolean {

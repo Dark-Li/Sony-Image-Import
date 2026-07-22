@@ -88,6 +88,23 @@ public final class CameraContentItem {
         return bestDownloadUrl();
     }
 
+    public String previewThumbnailUrl() {
+        return isIndependentPreview(thumbnailUrl) ? thumbnailUrl : "";
+    }
+
+    public String fullPreviewUrl() {
+        if (isIndependentPreview(largeUrl)) {
+            return largeUrl;
+        }
+        return previewThumbnailUrl();
+    }
+
+    private boolean isIndependentPreview(String candidate) {
+        return candidate != null
+                && !candidate.isEmpty()
+                && (originalUrl == null || originalUrl.isEmpty() || !candidate.equals(originalUrl));
+    }
+
     public boolean hasDownloadUrl() {
         String url = bestDownloadUrl();
         return url != null && !url.isEmpty();
