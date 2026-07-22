@@ -415,3 +415,18 @@
 - Confirmed both Back paths return from `Date` to the connected camera home.
 - Confirmed the `Date` page has one summary only, and the 37-photo page has no breadcrumb or filename overlays.
 - Opened `DSC06913.JPG` from the cleaned thumbnail grid to verify preview navigation remains available.
+
+## 2026-07-22 Local-only Wi-Fi Preview Routing Fix
+
+### Implemented in this iteration
+- Route every Compose thumbnail and large-preview HTTP request through the `CameraWifiBinding` network selected by the one-tap camera connection flow.
+- Hold the Wi-Fi lease until the response body has been read, then release it through the existing reference-counted binding.
+- Log HTTP status and transport failures instead of silently leaving the loading placeholder on screen.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.5`, `versionCode=37`.
+- Installed successfully on ADB device `909e29e1` and performed a fresh one-tap connection to `DIRECT-leE1:ILCE-7RM3`.
+- Opened `2026-7-21`; all 15 initially visible `TN_*.JPG` resources loaded through camera network `169` in about two seconds.
+- Opened `DSC06913.JPG`; its 888,917-byte `LRG_DSC06913.JPG` preview loaded in under one second and replaced the loading state.
+- Imported the original `DSC06913.JPG`: 36,012,032-byte JPEG, 1 success, 0 failures.
+- After the download released its Wi-Fi lease, scrolled to uncached photos and confirmed another set of thumbnail requests loaded successfully.

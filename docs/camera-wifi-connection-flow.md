@@ -20,10 +20,13 @@ Compose UI
       -> CameraWifiProfileStore (Android Keystore encrypted password)
       -> CameraWifiConnector (owns NetworkRequest/NetworkCallback)
           -> CameraWifiBinding (preferred Network)
-              -> SSDP / DMS / Scalar protocol and DownloadService
+              -> SSDP / DMS / Scalar protocol
+              -> Compose thumbnail and preview requests
+              -> DownloadService
 ```
 
 `CameraWifiBinding` still supports an already-connected Wi-Fi network, but a network returned by `CameraWifiConnector` always takes precedence.
+Every camera HTTP request must hold a binding lease until its response is fully read. Compose image requests use `lease.network.openConnection(...)` explicitly because a `WifiNetworkSpecifier` network is local-only and is not guaranteed to become Android's default route.
 
 ## UI states
 

@@ -2183,13 +2183,19 @@ private suspend fun loadBitmap(context: Context, url: String, maxDimension: Int)
             return@withContext bitmap
         }
     }
+    var wifiLease: CameraWifiBinding.Lease? = null
     var connection: HttpURLConnection? = null
     try {
-        connection = URL(url).openConnection() as HttpURLConnection
+        wifiLease = CameraWifiBinding.acquire(context)
+        connection = wifiLease.network.openConnection(URL(url)) as HttpURLConnection
         connection.connectTimeout = 3500
         connection.readTimeout = 9000
         connection.setRequestProperty("Accept", "image/*,*/*")
-        if (connection.responseCode !in 200..299) return@withContext null
+        val responseCode = connection.responseCode
+        if (responseCode !in 200..299) {
+            Log.w("SonyEdge-Preview", "HTTP $responseCode from ${url.substringBefore('?')}")
+            return@withContext null
+        }
         val bytes = connection.inputStream.use { it.readBytes() }
         Log.d(
             "SonyEdge-Preview",
@@ -2204,10 +2210,15 @@ private suspend fun loadBitmap(context: Context, url: String, maxDimension: Int)
         val bitmap = decodeSampledBitmap(bytes, maxDimension)
         if (bitmap != null) imageCache.put(memoryKey, bitmap)
         bitmap
-    } catch (_: Exception) {
+    } catch (exception: Exception) {
+        Log.w(
+            "SonyEdge-Preview",
+            "Failed to load ${url.substringBefore('?')}: ${exception.javaClass.simpleName}: ${exception.message}"
+        )
         null
     } finally {
         connection?.disconnect()
+        wifiLease?.close()
     }
 }
 
