@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -47,6 +48,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -57,23 +60,30 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +96,7 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -115,6 +126,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -167,7 +181,15 @@ private val navItems = listOf(
 fun SonyEdgeApp(
     state: SonyEdgeUiState,
     onTab: (SonyEdgeTab) -> Unit,
-    onConnect: () -> Unit,
+    onConnectCameraWifi: () -> Unit,
+    onSubmitCameraCredentials: (String, String) -> Unit,
+    onDismissCameraCredentials: () -> Unit,
+    onConnectCurrentWifi: () -> Unit,
+    onCancelCameraConnection: () -> Unit,
+    onForgetCamera: () -> Unit,
+    onBrowseCameraPhotos: () -> Unit,
+    onOpenCameraAlbums: () -> Unit,
+    onOpenImportsFromHome: () -> Unit,
     onRefresh: () -> Unit,
     onRoot: () -> Unit,
     onBack: () -> Unit,
@@ -221,7 +243,12 @@ fun SonyEdgeApp(
                                 SonyEdgeTab.Library -> LibraryScreen(
                                     state = state,
                                     expanded = expanded,
-                                    onConnect = onConnect,
+                                    onConnectCameraWifi = onConnectCameraWifi,
+                                    onConnectCurrentWifi = onConnectCurrentWifi,
+                                    onCancelCameraConnection = onCancelCameraConnection,
+                                    onBrowseCameraPhotos = onBrowseCameraPhotos,
+                                    onOpenCameraAlbums = onOpenCameraAlbums,
+                                    onOpenImports = onOpenImportsFromHome,
                                     onBack = onBack,
                                     onPreview = onPreview,
                                     onToggle = onToggleSelection,
@@ -234,7 +261,7 @@ fun SonyEdgeApp(
                                 SonyEdgeTab.Camera -> CameraScreen(
                                     state = state,
                                     expanded = expanded,
-                                    onConnect = onConnect,
+                                    onConnect = onConnectCurrentWifi,
                                     onRefresh = onRefresh,
                                     onRoot = onRoot,
                                     onBack = onBack,
@@ -250,7 +277,8 @@ fun SonyEdgeApp(
 
                                 SonyEdgeTab.Settings -> SettingsScreen(
                                     state = state,
-                                    onConnect = onConnect,
+                                    onConnect = onConnectCameraWifi,
+                                    onForgetCamera = onForgetCamera,
                                     onReceiveCameraSelection = onReceiveCameraSelection,
                                     onOpenGallery = onOpenGallery,
                                     onClearLogs = onClearLogs
@@ -264,6 +292,14 @@ fun SonyEdgeApp(
                 }
             }
         }
+    }
+
+    if (state.credentialsDialogVisible) {
+        CameraCredentialsDialog(
+            rememberedSsid = state.rememberedCamera?.ssid.orEmpty(),
+            onDismiss = onDismissCameraCredentials,
+            onSubmit = onSubmitCameraCredentials
+        )
     }
 
     val previewIndex = state.previewIndex
@@ -285,14 +321,17 @@ fun SonyEdgeApp(
 
 @Composable
 private fun AppHeader(state: SonyEdgeUiState) {
-    val headerText = when (state.connectionState) {
-        ConnectionState.Connected -> "Connected"
-        ConnectionState.Searching -> "Searching"
-        ConnectionState.Error -> "Needs attention"
-        ConnectionState.Idle -> "Camera Wi-Fi"
+    val headerText = when (state.connectPhase) {
+        CameraConnectPhase.Connected -> "Connected"
+        CameraConnectPhase.RequestingWifi,
+        CameraConnectPhase.VerifyingCamera,
+        CameraConnectPhase.PreparingLibrary -> "Connecting"
+        CameraConnectPhase.Failed -> "Needs attention"
+        CameraConnectPhase.Disconnected,
+        CameraConnectPhase.WaitingForCredentials -> "Camera Wi-Fi"
     }
-    val ready = state.connectionState == ConnectionState.Connected
-    val warning = state.connectionState == ConnectionState.Error
+    val ready = state.connectPhase == CameraConnectPhase.Connected
+    val warning = state.connectPhase == CameraConnectPhase.Failed
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -395,7 +434,12 @@ private fun ToolbarButton(
 private fun LibraryScreen(
     state: SonyEdgeUiState,
     expanded: Boolean,
-    onConnect: () -> Unit,
+    onConnectCameraWifi: () -> Unit,
+    onConnectCurrentWifi: () -> Unit,
+    onCancelCameraConnection: () -> Unit,
+    onBrowseCameraPhotos: () -> Unit,
+    onOpenCameraAlbums: () -> Unit,
+    onOpenImports: () -> Unit,
     onBack: () -> Unit,
     onPreview: (CameraContentItem) -> Unit,
     onToggle: (CameraContentItem) -> Unit,
@@ -404,45 +448,47 @@ private fun LibraryScreen(
     onInvert: () -> Unit,
     onDownload: () -> Unit
 ) {
+    val showConnectionHome = state.photos.isEmpty() || state.connectionHomeVisible
     Box(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 12.dp)
-        ) {
-            val titleLeading: (@Composable () -> Unit)? = if (state.photos.isNotEmpty() && state.folderStack.isNotEmpty()) {
-                {
-                    IconButton(onClick = onBack, enabled = !state.loading, modifier = Modifier.size(38.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SonyBlue)
-                    }
-                }
-            } else {
-                null
-            }
-            PageTitle(
-                title = if (state.photos.isEmpty()) "Photos" else state.currentFolderTitle,
-                subtitle = "${state.photos.size} items  /  ${state.selectedKeys.size} selected",
-                leading = titleLeading
+        if (showConnectionHome) {
+            CameraConnectionHome(
+                state = state,
+                expanded = expanded,
+                onConnectCameraWifi = onConnectCameraWifi,
+                onConnectCurrentWifi = onConnectCurrentWifi,
+                onCancel = onCancelCameraConnection,
+                onBrowsePhotos = onBrowseCameraPhotos,
+                onOpenAlbums = onOpenCameraAlbums,
+                onOpenImports = onOpenImports
             )
-            if (state.photos.isNotEmpty()) {
+        } else {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 12.dp)
+            ) {
+                val titleLeading: (@Composable () -> Unit)? = if (state.folderStack.isNotEmpty()) {
+                    {
+                        IconButton(onClick = onBack, enabled = !state.loading, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SonyBlue)
+                        }
+                    }
+                } else {
+                    null
+                }
+                PageTitle(
+                    title = state.currentFolderTitle,
+                    subtitle = "${state.photos.size} items  /  ${state.selectedKeys.size} selected",
+                    leading = titleLeading
+                )
                 Spacer(Modifier.height(2.dp))
                 PathStrip(folderPath(state))
-            }
-            state.errorMessage?.let {
+                state.errorMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    InlineErrorCard(it, onConnectCurrentWifi)
+                }
                 Spacer(Modifier.height(8.dp))
-                InlineErrorCard(it, onConnect)
-            }
-            Spacer(Modifier.height(8.dp))
-            if (state.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            if (state.photos.isEmpty()) {
-                EmptyState(
-                    title = "No media loaded",
-                    message = state.status,
-                    button = "Connect and browse",
-                    onAction = onConnect,
-                    loading = state.loading
-                )
-            } else {
+                if (state.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 LazyVerticalGrid(
                     columns = if (expanded) GridCells.Adaptive(148.dp) else GridCells.Fixed(3),
                     contentPadding = PaddingValues(bottom = if (state.selectedKeys.isEmpty()) 20.dp else 96.dp),
@@ -461,7 +507,7 @@ private fun LibraryScreen(
                 }
             }
         }
-        if (state.selectedKeys.isNotEmpty()) {
+        if (!showConnectionHome && state.selectedKeys.isNotEmpty()) {
             SelectionBar(
                 selectedCount = state.selectedKeys.size,
                 totalCount = state.photos.size,
@@ -473,6 +519,402 @@ private fun LibraryScreen(
             )
         }
     }
+}
+
+@Composable
+private fun CameraConnectionHome(
+    state: SonyEdgeUiState,
+    expanded: Boolean,
+    onConnectCameraWifi: () -> Unit,
+    onConnectCurrentWifi: () -> Unit,
+    onCancel: () -> Unit,
+    onBrowsePhotos: () -> Unit,
+    onOpenAlbums: () -> Unit,
+    onOpenImports: () -> Unit
+) {
+    when (state.connectPhase) {
+        CameraConnectPhase.RequestingWifi,
+        CameraConnectPhase.VerifyingCamera,
+        CameraConnectPhase.PreparingLibrary -> ConnectingCameraState(
+            phase = state.connectPhase,
+            expanded = expanded,
+            onCancel = onCancel
+        )
+
+        CameraConnectPhase.Connected -> ConnectedCameraHome(
+            state = state,
+            expanded = expanded,
+            onBrowsePhotos = onBrowsePhotos,
+            onOpenAlbums = onOpenAlbums,
+            onOpenImports = onOpenImports
+        )
+
+        CameraConnectPhase.Disconnected,
+        CameraConnectPhase.WaitingForCredentials,
+        CameraConnectPhase.Failed -> DisconnectedCameraState(
+            state = state,
+            expanded = expanded,
+            onConnectCameraWifi = onConnectCameraWifi,
+            onConnectCurrentWifi = onConnectCurrentWifi
+        )
+    }
+}
+
+@Composable
+private fun DisconnectedCameraState(
+    state: SonyEdgeUiState,
+    expanded: Boolean,
+    onConnectCameraWifi: () -> Unit,
+    onConnectCurrentWifi: () -> Unit
+) {
+    val remembered = state.rememberedCamera
+    val cameraLabel = remembered?.modelName?.takeIf { it.isNotBlank() }
+        ?: remembered?.ssid?.takeIf { it.isNotBlank() }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = if (expanded) 24.dp else 20.dp, vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(if (expanded) 36.dp else 18.dp))
+        CameraWifiVisual(connected = false)
+        Spacer(Modifier.height(24.dp))
+        Text(
+            if (state.connectPhase == CameraConnectPhase.Failed) "连接未完成" else "未连接相机",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextMain,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (state.connectPhase == CameraConnectPhase.Failed) {
+                state.errorMessage ?: "请确认相机已开启发送到手机功能后重试。"
+            } else {
+                "连接相机 Wi-Fi 后即可浏览和导入照片"
+            },
+            color = TextMuted,
+            fontSize = 14.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onConnectCameraWifi,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                cameraLabel?.let { "连接 $it" } ?: "连接相机 Wi-Fi",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = onConnectCurrentWifi,
+            modifier = Modifier.fillMaxWidth().height(46.dp),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("已连接相机 Wi-Fi？直接浏览", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.height(18.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(shape = RoundedCornerShape(8.dp), color = SonyBlueSoft, contentColor = SonyBlue) {
+                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.padding(8.dp).size(18.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("如何连接", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text("在相机中打开“发送到智能手机”，首次连接输入屏幕上的 Wi-Fi 信息。", color = TextMuted, fontSize = 12.sp, maxLines = 2)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CameraWifiVisual(connected: Boolean) {
+    Surface(
+        modifier = Modifier.size(132.dp),
+        color = if (connected) SuccessSoft else SonyBlueSoft,
+        contentColor = if (connected) SuccessGreen else SonyBlue,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(66.dp))
+            Surface(
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
+                color = Color.White,
+                contentColor = if (connected) SuccessGreen else SonyBlue,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.padding(6.dp).size(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectingCameraState(
+    phase: CameraConnectPhase,
+    expanded: Boolean,
+    onCancel: () -> Unit
+) {
+    val currentStep = when (phase) {
+        CameraConnectPhase.RequestingWifi -> 0
+        CameraConnectPhase.VerifyingCamera -> 1
+        CameraConnectPhase.PreparingLibrary -> 2
+        else -> 0
+    }
+    val steps = listOf("连接相机 Wi-Fi", "验证相机服务", "准备照片浏览")
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = if (expanded) 24.dp else 20.dp, vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(if (expanded) 30.dp else 12.dp))
+        CameraWifiVisual(connected = false)
+        Spacer(Modifier.height(22.dp))
+        Text("正在连接到相机", fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Spacer(Modifier.height(6.dp))
+        Text("请保持相机 Wi-Fi 页面开启", color = TextMuted, fontSize = 14.sp, maxLines = 1)
+        Spacer(Modifier.height(22.dp))
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                steps.forEachIndexed { index, title ->
+                    ConnectionStepRow(
+                        title = title,
+                        done = index < currentStep,
+                        current = index == currentStep
+                    )
+                    if (index != steps.lastIndex) HorizontalDivider(color = BorderSoft.copy(alpha = 0.65f))
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        TextButton(onClick = onCancel) { Text("取消连接", maxLines = 1) }
+    }
+}
+
+@Composable
+private fun ConnectionStepRow(title: String, done: Boolean, current: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        when {
+            done -> Surface(shape = CircleShape, color = SuccessSoft, contentColor = SuccessGreen) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.padding(5.dp).size(16.dp))
+            }
+            current -> CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+            else -> Surface(
+                modifier = Modifier.size(26.dp),
+                shape = CircleShape,
+                color = Color.Transparent,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft)
+            ) {}
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            color = if (current || done) TextMain else TextMuted,
+            fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun ConnectedCameraHome(
+    state: SonyEdgeUiState,
+    expanded: Boolean,
+    onBrowsePhotos: () -> Unit,
+    onOpenAlbums: () -> Unit,
+    onOpenImports: () -> Unit
+) {
+    val camera = state.connectedCamera
+    val model = camera?.modelName?.takeIf { it.isNotBlank() }
+        ?: camera?.friendlyName?.takeIf { it.isNotBlank() }
+        ?: "Sony Camera"
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft)
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(8.dp), color = SonyBlueSoft, contentColor = SonyBlue) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.padding(12.dp).size(34.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(model, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    camera?.ssid?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    camera?.host?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Surface(shape = RoundedCornerShape(8.dp), color = SuccessSoft, contentColor = SuccessGreen) {
+                    Text("已连接", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        CameraHomeAction(
+            title = "浏览相机照片",
+            subtitle = "查看并选择要导入的照片",
+            icon = Icons.Default.Folder,
+            tone = SonyBlueSoft,
+            iconTint = SonyBlue,
+            onClick = onBrowsePhotos
+        )
+        CameraHomeAction(
+            title = "相册",
+            subtitle = "按日期和文件夹浏览",
+            icon = Icons.Default.PhotoLibrary,
+            tone = Color(0xFFEAF7F5),
+            iconTint = Color(0xFF0F8A76),
+            onClick = onOpenAlbums
+        )
+        CameraHomeAction(
+            title = "传输记录",
+            subtitle = "查看导入历史和状态",
+            icon = Icons.Default.CloudDownload,
+            tone = SurfaceSoft,
+            iconTint = TextMuted,
+            onClick = onOpenImports
+        )
+    }
+}
+
+@Composable
+private fun CameraHomeAction(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    tone: Color,
+    iconTint: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = Color.White,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft)
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(8.dp), color = tone, contentColor = iconTint) {
+                Icon(icon, contentDescription = null, modifier = Modifier.padding(10.dp).size(23.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(subtitle, color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+        }
+    }
+}
+
+@Composable
+private fun CameraCredentialsDialog(
+    rememberedSsid: String,
+    onDismiss: () -> Unit,
+    onSubmit: (String, String) -> Unit
+) {
+    var ssid by remember { mutableStateOf(rememberedSsid) }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = {
+            password = ""
+            onDismiss()
+        },
+        shape = RoundedCornerShape(8.dp),
+        title = { Text("连接相机 Wi-Fi", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("请输入相机屏幕上显示的 Wi-Fi 信息。开放热点可留空密码。", color = TextMuted, fontSize = 13.sp)
+                OutlinedTextField(
+                    value = ssid,
+                    onValueChange = { ssid = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Wi-Fi 名称 (SSID)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("密码（可选）") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                            )
+                        }
+                    },
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val submittedSsid = ssid.trim()
+                    val submittedPassword = password
+                    password = ""
+                    onSubmit(submittedSsid, submittedPassword)
+                },
+                enabled = ssid.isNotBlank(),
+                shape = RoundedCornerShape(8.dp)
+            ) { Text("连接", maxLines = 1) }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                password = ""
+                onDismiss()
+            }) { Text("取消", maxLines = 1) }
+        }
+    )
 }
 
 @Composable
@@ -761,6 +1203,7 @@ private fun TransferMetric(label: String, value: String, modifier: Modifier = Mo
 private fun SettingsScreen(
     state: SonyEdgeUiState,
     onConnect: () -> Unit,
+    onForgetCamera: () -> Unit,
     onReceiveCameraSelection: () -> Unit,
     onOpenGallery: () -> Unit,
     onClearLogs: () -> Unit
@@ -775,6 +1218,31 @@ private fun SettingsScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         PageTitle("Settings", "Connection, storage and diagnostics")
         Spacer(Modifier.height(14.dp))
+        state.rememberedCamera?.let { camera ->
+            Surface(
+                color = Color.White,
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSoft)
+            ) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = SonyBlueSoft, contentColor = SonyBlue) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.padding(10.dp).size(22.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            camera.modelName?.takeIf { it.isNotBlank() } ?: "Saved camera",
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(camera.ssid, color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    TextButton(onClick = onForgetCamera) { Text("Forget", maxLines = 1) }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
         InfoPanel(
             title = "Camera connection",
             message = connectionText,

@@ -38,7 +38,15 @@ class ComposeMainActivity : ComponentActivity() {
             SonyEdgeApp(
                 state = state,
                 onTab = viewModel::selectTab,
-                onConnect = viewModel::connectAndBrowse,
+                onConnectCameraWifi = viewModel::connectCameraWifi,
+                onSubmitCameraCredentials = viewModel::submitCameraCredentials,
+                onDismissCameraCredentials = viewModel::dismissCameraCredentials,
+                onConnectCurrentWifi = viewModel::connectCurrentWifi,
+                onCancelCameraConnection = viewModel::cancelCameraConnection,
+                onForgetCamera = viewModel::forgetCamera,
+                onBrowseCameraPhotos = viewModel::browseCameraPhotos,
+                onOpenCameraAlbums = viewModel::openCameraAlbums,
+                onOpenImportsFromHome = viewModel::openImportsFromHome,
                 onRefresh = viewModel::refresh,
                 onRoot = viewModel::browseRoot,
                 onBack = viewModel::goBack,
@@ -92,7 +100,9 @@ class ComposeMainActivity : ComponentActivity() {
         ) {
             permissions += Manifest.permission.POST_NOTIFICATIONS
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT <= 32 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
             permissions += Manifest.permission.ACCESS_FINE_LOCATION
         }
         if (Build.VERSION.SDK_INT >= 33 &&

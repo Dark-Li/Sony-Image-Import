@@ -14,6 +14,7 @@ public final class CameraWifiBinding {
     private static final Object LOCK = new Object();
     private static ConnectivityManager manager;
     private static Network boundNetwork;
+    private static Network preferredNetwork;
     private static int leaseCount;
 
     private CameraWifiBinding() {
@@ -36,7 +37,14 @@ public final class CameraWifiBinding {
             if (currentManager == null) {
                 throw new IllegalStateException("ConnectivityManager is unavailable");
             }
-            Network wifi = findWifi(currentManager);
+            Network wifi = preferredNetwork;
+            if (!isWifi(currentManager, wifi)) {
+                if (wifi != null) {
+                    Log.d(TAG, "Preferred Wi-Fi network is no longer available: " + wifi);
+                    preferredNetwork = null;
+                }
+                wifi = findWifi(currentManager);
+            }
             if (wifi == null) {
                 throw new IllegalStateException("No active Wi-Fi network is available");
             }
@@ -49,6 +57,47 @@ public final class CameraWifiBinding {
             Log.d(TAG, "Bound process to Wi-Fi network " + wifi);
             Log.d(TAG, "Acquired Wi-Fi lease count=" + leaseCount);
             return new Lease(wifi);
+        }
+    }
+
+    /**
+     * Makes a specifically requested camera network the first choice for future leases.
+     * Existing leases keep their current process binding until the final lease closes.
+     */
+    public static void setPreferredNetwork(Context context, Network network) {
+        if (network == null) {
+            throw new IllegalArgumentException("Preferred network must not be null");
+        }
+        ConnectivityManager currentManager = context.getApplicationContext()
+                .getSystemService(ConnectivityManager.class);
+        if (currentManager == null) {
+            throw new IllegalStateException("ConnectivityManager is unavailable");
+        }
+        if (!isWifi(currentManager, network)) {
+            throw new IllegalArgumentException("Preferred network is not an available Wi-Fi network");
+        }
+
+        synchronized (LOCK) {
+            preferredNetwork = network;
+            if (leaseCount > 0 && !network.equals(boundNetwork)) {
+                Log.d(TAG, "Deferred preferred Wi-Fi network " + network
+                        + " until " + leaseCount + " active lease(s) close");
+            } else {
+                Log.d(TAG, "Preferred Wi-Fi network set to " + network);
+            }
+        }
+    }
+
+    /** Clears the requested network only if it is still the current preference. */
+    public static void clearPreferredNetwork(Network network) {
+        if (network == null) {
+            return;
+        }
+        synchronized (LOCK) {
+            if (network.equals(preferredNetwork)) {
+                preferredNetwork = null;
+                Log.d(TAG, "Cleared preferred Wi-Fi network " + network);
+            }
         }
     }
 
