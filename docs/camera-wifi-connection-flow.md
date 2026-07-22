@@ -29,7 +29,11 @@ Compose UI
 
 1. Disconnected: connect a saved camera, enter first-use credentials, or browse an already-connected camera network.
 2. Connecting: connect Wi-Fi, verify Sony services, then prepare the camera library.
-3. Connected home: show real model, SSID and host data, then let the user open photos, albums or imports.
+3. Connected home: show real model, SSID and host data, then let the user open photos or import history.
+
+The connected home exposes photo browsing and import history. Protocol folders are an implementation detail: Back from any date, folder, or photo grid returns directly to the connected home instead of walking through `Camera`, `PhotoRoot`, or `Date` parents.
+
+Users can add a different camera without deleting the remembered one first. The existing encrypted profile is replaced only after the new camera Wi-Fi and Sony services have both been verified. Disconnect releases an app-requested camera network and clears the active camera session while retaining the remembered profile for the next one-tap connection.
 
 Passwords never enter `SonyEdgeUiState`, logs, saved instance state, or diagnostics. SharedPreferences only store AES-GCM ciphertext and its IV; the key remains in Android Keystore. App backup is disabled so encrypted preference data cannot be restored without its device-bound key.
 

@@ -73,6 +73,7 @@ data class SonyEdgeUiState(
     val rememberedCamera: RememberedCamera? = null,
     val connectedCamera: ConnectedCameraInfo? = null,
     val credentialsDialogVisible: Boolean = false,
+    val credentialsSsidPrefill: String = "",
     val connectionHomeVisible: Boolean = false,
     val status: String = "Connect to the camera Wi-Fi, then browse.",
     val errorMessage: String? = null,
@@ -104,6 +105,7 @@ data class SonyEdgeUiState(
     val shouldHandleBack: Boolean
         get() = previewIndex != null ||
             selectedKeys.isNotEmpty() ||
+            isConnectedCameraBrowsing(this) ||
             folderStack.isNotEmpty() ||
             activeTab != browseTabFor(this)
 }
@@ -155,6 +157,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         when {
             state.previewIndex != null -> closePreview()
             state.selectedKeys.isNotEmpty() -> clearSelection()
+            isConnectedCameraBrowsing(state) -> returnToConnectionHome()
             state.activeTab != browseTabFor(state) -> selectTab(SonyEdgeTab.Library)
             state.folderStack.isNotEmpty() -> goBack()
         }
@@ -168,6 +171,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                     activeTab = SonyEdgeTab.Library,
                     connectPhase = CameraConnectPhase.WaitingForCredentials,
                     credentialsDialogVisible = true,
+                    credentialsSsidPrefill = "",
                     connectionHomeVisible = false,
                     errorMessage = null,
                     loading = false
@@ -181,6 +185,21 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         requestCameraWifi(profile.ssid, profile.password, autoBrowse = false)
     }
 
+    fun addCamera() {
+        pendingCameraSsid = null
+        pendingCameraPassword = null
+        _uiState.update {
+            it.copy(
+                activeTab = SonyEdgeTab.Library,
+                connectPhase = CameraConnectPhase.WaitingForCredentials,
+                credentialsDialogVisible = true,
+                credentialsSsidPrefill = "",
+                errorMessage = null,
+                loading = false
+            )
+        }
+    }
+
     fun submitCameraCredentials(ssid: String, password: String) {
         val normalizedSsid = ssid.trim()
         if (normalizedSsid.isEmpty()) {
@@ -188,6 +207,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     connectPhase = CameraConnectPhase.WaitingForCredentials,
                     credentialsDialogVisible = true,
+                    credentialsSsidPrefill = ssid,
                     errorMessage = "Enter the camera Wi-Fi name.",
                     loading = false
                 )
@@ -200,10 +220,13 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     fun dismissCameraCredentials() {
         pendingCameraSsid = null
         pendingCameraPassword = null
+        val connected = activeSession != null
         _uiState.update {
             it.copy(
-                connectPhase = CameraConnectPhase.Disconnected,
+                connectPhase = if (connected) CameraConnectPhase.Connected else CameraConnectPhase.Disconnected,
                 credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
+                connectionHomeVisible = connected || it.connectionHomeVisible,
                 errorMessage = null,
                 loading = false
             )
@@ -228,6 +251,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectPhase = CameraConnectPhase.Disconnected,
                 connectedCamera = null,
                 credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
                 connectionHomeVisible = false,
                 status = "Camera connection cancelled.",
                 errorMessage = null,
@@ -265,6 +289,61 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
     }
 
+    fun returnToConnectionHome() {
+        val session = activeSession ?: return
+        browseRequestId++
+        val modelName = _uiState.value.connectedCamera?.modelName
+            ?: resolveCameraModel(
+                modelNumber = session.device.modelNumber,
+                modelName = session.device.modelName,
+                friendlyName = session.device.friendlyName,
+                ssid = pendingCameraSsid.orEmpty()
+            )
+        _uiState.update {
+            it.copy(
+                activeTab = SonyEdgeTab.Library,
+                connectionState = ConnectionState.Connected,
+                connectPhase = CameraConnectPhase.Connected,
+                credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
+                connectionHomeVisible = true,
+                status = "Connected to $modelName.",
+                errorMessage = null,
+                loading = false,
+                currentFolderId = "0",
+                currentFolderTitle = "Camera",
+                folderStack = emptyList(),
+                folders = emptyList(),
+                photos = emptyList(),
+                selectedKeys = emptySet(),
+                previewIndex = null
+            )
+        }
+    }
+
+    fun disconnectCamera() {
+        connectionRequestId++
+        wifiConnector.cancel()
+        pendingCameraSsid = null
+        pendingCameraPassword = null
+        autoBrowseAfterConnection = false
+        clearCameraSession()
+        _uiState.update {
+            it.copy(
+                activeTab = SonyEdgeTab.Library,
+                connectionState = ConnectionState.Idle,
+                connectPhase = CameraConnectPhase.Disconnected,
+                connectedCamera = null,
+                credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
+                connectionHomeVisible = false,
+                status = "Camera disconnected.",
+                errorMessage = null,
+                loading = false
+            )
+        }
+    }
+
     fun openCameraAlbums() {
         if (activeSession == null) {
             failCameraConnection("Connect to the camera Wi-Fi first.", releaseRequestedNetwork = false)
@@ -296,6 +375,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectPhase = CameraConnectPhase.RequestingWifi,
                 connectedCamera = null,
                 credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
                 connectionHomeVisible = true,
                 status = "Connecting to camera Wi-Fi...",
                 errorMessage = null,
@@ -349,6 +429,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectPhase = CameraConnectPhase.VerifyingCamera,
                 connectedCamera = null,
                 credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
                 connectionHomeVisible = true,
                 status = "Verifying Sony camera services...",
                 errorMessage = null,
@@ -430,6 +511,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 } ?: it.rememberedCamera,
                 connectedCamera = connectedInfo,
                 credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
                 connectionHomeVisible = !shouldAutoBrowse,
                 status = "Connected to $modelName.",
                 errorMessage = null,
@@ -463,6 +545,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectPhase = CameraConnectPhase.Failed,
                 connectedCamera = null,
                 credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
                 connectionHomeVisible = false,
                 status = message,
                 errorMessage = message,
@@ -532,6 +615,10 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
 
     fun goBack() {
         val state = _uiState.value
+        if (isConnectedCameraBrowsing(state)) {
+            returnToConnectionHome()
+            return
+        }
         val previous = state.folderStack.lastOrNull() ?: return
         val nextStack = state.folderStack.dropLast(1)
         val cached = folderCache[previous.id]
@@ -1186,6 +1273,12 @@ fun cleanTitle(title: String?, fallback: String): String =
 
 fun browseTabFor(state: SonyEdgeUiState): SonyEdgeTab =
     browseTabFor(state.folders, state.photos)
+
+private fun isConnectedCameraBrowsing(state: SonyEdgeUiState): Boolean =
+    state.connectPhase == CameraConnectPhase.Connected &&
+        state.connectedCamera != null &&
+        !state.connectionHomeVisible &&
+        state.activeTab in setOf(SonyEdgeTab.Library, SonyEdgeTab.Camera)
 
 fun browseTabFor(folders: List<DmsContainerItem>, photos: List<CameraContentItem>): SonyEdgeTab =
     if (photos.isEmpty() && folders.isNotEmpty()) SonyEdgeTab.Camera else SonyEdgeTab.Library

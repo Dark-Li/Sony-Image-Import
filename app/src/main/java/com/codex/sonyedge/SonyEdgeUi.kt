@@ -59,6 +59,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
@@ -78,6 +79,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -186,12 +188,12 @@ fun SonyEdgeApp(
     onDismissCameraCredentials: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
     onCancelCameraConnection: () -> Unit,
+    onAddCamera: () -> Unit,
+    onDisconnectCamera: () -> Unit,
     onForgetCamera: () -> Unit,
     onBrowseCameraPhotos: () -> Unit,
-    onOpenCameraAlbums: () -> Unit,
     onOpenImportsFromHome: () -> Unit,
     onRefresh: () -> Unit,
-    onRoot: () -> Unit,
     onBack: () -> Unit,
     onOpenFolder: (DmsContainerItem) -> Unit,
     onPreview: (CameraContentItem) -> Unit,
@@ -246,8 +248,9 @@ fun SonyEdgeApp(
                                     onConnectCameraWifi = onConnectCameraWifi,
                                     onConnectCurrentWifi = onConnectCurrentWifi,
                                     onCancelCameraConnection = onCancelCameraConnection,
+                                    onAddCamera = onAddCamera,
+                                    onDisconnectCamera = onDisconnectCamera,
                                     onBrowseCameraPhotos = onBrowseCameraPhotos,
-                                    onOpenCameraAlbums = onOpenCameraAlbums,
                                     onOpenImports = onOpenImportsFromHome,
                                     onBack = onBack,
                                     onPreview = onPreview,
@@ -263,7 +266,6 @@ fun SonyEdgeApp(
                                     expanded = expanded,
                                     onConnect = onConnectCurrentWifi,
                                     onRefresh = onRefresh,
-                                    onRoot = onRoot,
                                     onBack = onBack,
                                     onOpenFolder = onOpenFolder
                                 )
@@ -296,7 +298,7 @@ fun SonyEdgeApp(
 
     if (state.credentialsDialogVisible) {
         CameraCredentialsDialog(
-            rememberedSsid = state.rememberedCamera?.ssid.orEmpty(),
+            ssidPrefill = state.credentialsSsidPrefill,
             onDismiss = onDismissCameraCredentials,
             onSubmit = onSubmitCameraCredentials
         )
@@ -437,8 +439,9 @@ private fun LibraryScreen(
     onConnectCameraWifi: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
     onCancelCameraConnection: () -> Unit,
+    onAddCamera: () -> Unit,
+    onDisconnectCamera: () -> Unit,
     onBrowseCameraPhotos: () -> Unit,
-    onOpenCameraAlbums: () -> Unit,
     onOpenImports: () -> Unit,
     onBack: () -> Unit,
     onPreview: (CameraContentItem) -> Unit,
@@ -457,8 +460,9 @@ private fun LibraryScreen(
                 onConnectCameraWifi = onConnectCameraWifi,
                 onConnectCurrentWifi = onConnectCurrentWifi,
                 onCancel = onCancelCameraConnection,
+                onAddCamera = onAddCamera,
+                onDisconnect = onDisconnectCamera,
                 onBrowsePhotos = onBrowseCameraPhotos,
-                onOpenAlbums = onOpenCameraAlbums,
                 onOpenImports = onOpenImports
             )
         } else {
@@ -467,14 +471,10 @@ private fun LibraryScreen(
                     .fillMaxSize()
                     .padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 12.dp)
             ) {
-                val titleLeading: (@Composable () -> Unit)? = if (state.folderStack.isNotEmpty()) {
-                    {
-                        IconButton(onClick = onBack, enabled = !state.loading, modifier = Modifier.size(38.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SonyBlue)
-                        }
+                val titleLeading: @Composable () -> Unit = {
+                    IconButton(onClick = onBack, enabled = !state.loading, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to camera", tint = SonyBlue)
                     }
-                } else {
-                    null
                 }
                 PageTitle(
                     title = state.currentFolderTitle,
@@ -528,8 +528,9 @@ private fun CameraConnectionHome(
     onConnectCameraWifi: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
     onCancel: () -> Unit,
+    onAddCamera: () -> Unit,
+    onDisconnect: () -> Unit,
     onBrowsePhotos: () -> Unit,
-    onOpenAlbums: () -> Unit,
     onOpenImports: () -> Unit
 ) {
     when (state.connectPhase) {
@@ -545,8 +546,8 @@ private fun CameraConnectionHome(
             state = state,
             expanded = expanded,
             onBrowsePhotos = onBrowsePhotos,
-            onOpenAlbums = onOpenAlbums,
-            onOpenImports = onOpenImports
+            onOpenImports = onOpenImports,
+            onDisconnect = onDisconnect
         )
 
         CameraConnectPhase.Disconnected,
@@ -555,7 +556,8 @@ private fun CameraConnectionHome(
             state = state,
             expanded = expanded,
             onConnectCameraWifi = onConnectCameraWifi,
-            onConnectCurrentWifi = onConnectCurrentWifi
+            onConnectCurrentWifi = onConnectCurrentWifi,
+            onAddCamera = onAddCamera
         )
     }
 }
@@ -565,7 +567,8 @@ private fun DisconnectedCameraState(
     state: SonyEdgeUiState,
     expanded: Boolean,
     onConnectCameraWifi: () -> Unit,
-    onConnectCurrentWifi: () -> Unit
+    onConnectCurrentWifi: () -> Unit,
+    onAddCamera: () -> Unit
 ) {
     val remembered = state.rememberedCamera
     val cameraLabel = remembered?.modelName?.takeIf { it.isNotBlank() }
@@ -614,9 +617,21 @@ private fun DisconnectedCameraState(
             )
         }
         Spacer(Modifier.height(10.dp))
-        OutlinedButton(
+        if (remembered != null) {
+            OutlinedButton(
+                onClick = onAddCamera,
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("连接其他相机", maxLines = 1)
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        TextButton(
             onClick = onConnectCurrentWifi,
-            modifier = Modifier.fillMaxWidth().height(46.dp),
+            modifier = Modifier.fillMaxWidth().height(42.dp),
             shape = RoundedCornerShape(8.dp)
         ) {
             Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -752,8 +767,8 @@ private fun ConnectedCameraHome(
     state: SonyEdgeUiState,
     expanded: Boolean,
     onBrowsePhotos: () -> Unit,
-    onOpenAlbums: () -> Unit,
-    onOpenImports: () -> Unit
+    onOpenImports: () -> Unit,
+    onDisconnect: () -> Unit
 ) {
     val camera = state.connectedCamera
     val model = camera?.modelName?.takeIf { it.isNotBlank() }
@@ -801,14 +816,6 @@ private fun ConnectedCameraHome(
             onClick = onBrowsePhotos
         )
         CameraHomeAction(
-            title = "相册",
-            subtitle = "按日期和文件夹浏览",
-            icon = Icons.Default.PhotoLibrary,
-            tone = Color(0xFFEAF7F5),
-            iconTint = Color(0xFF0F8A76),
-            onClick = onOpenAlbums
-        )
-        CameraHomeAction(
             title = "传输记录",
             subtitle = "查看导入历史和状态",
             icon = Icons.Default.CloudDownload,
@@ -816,6 +823,16 @@ private fun ConnectedCameraHome(
             iconTint = TextMuted,
             onClick = onOpenImports
         )
+        TextButton(
+            onClick = onDisconnect,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = TextMuted)
+        ) {
+            Icon(Icons.Default.WifiOff, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("断开连接", maxLines = 1)
+        }
     }
 }
 
@@ -850,11 +867,11 @@ private fun CameraHomeAction(
 
 @Composable
 private fun CameraCredentialsDialog(
-    rememberedSsid: String,
+    ssidPrefill: String,
     onDismiss: () -> Unit,
     onSubmit: (String, String) -> Unit
 ) {
-    var ssid by remember { mutableStateOf(rememberedSsid) }
+    var ssid by remember(ssidPrefill) { mutableStateOf(ssidPrefill) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     AlertDialog(
@@ -923,7 +940,6 @@ private fun CameraScreen(
     expanded: Boolean,
     onConnect: () -> Unit,
     onRefresh: () -> Unit,
-    onRoot: () -> Unit,
     onBack: () -> Unit,
     onOpenFolder: (DmsContainerItem) -> Unit
 ) {
@@ -935,16 +951,13 @@ private fun CameraScreen(
         PageTitle(
             title = albumTitle(state),
             subtitle = albumSubtitle(state),
+            leading = {
+                IconButton(onClick = onBack, enabled = !state.loading, modifier = Modifier.size(38.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to camera", tint = SonyBlue)
+                }
+            },
             action = {
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (state.folderStack.isNotEmpty()) {
-                        IconButton(onClick = onBack, enabled = !state.loading) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SonyBlue)
-                        }
-                        IconButton(onClick = onRoot, enabled = !state.loading) {
-                            Icon(Icons.Default.Folder, contentDescription = "Root", tint = SonyBlue)
-                        }
-                    }
                     IconButton(onClick = onRefresh, enabled = !state.loading) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = SonyBlue)
                     }
