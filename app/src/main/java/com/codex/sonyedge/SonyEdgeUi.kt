@@ -444,7 +444,7 @@ private fun LibraryScreen(
                 )
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(if (expanded) 148.dp else 112.dp),
+                    columns = if (expanded) GridCells.Adaptive(148.dp) else GridCells.Fixed(3),
                     contentPadding = PaddingValues(bottom = if (state.selectedKeys.isEmpty()) 20.dp else 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
