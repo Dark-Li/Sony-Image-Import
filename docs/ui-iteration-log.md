@@ -509,3 +509,20 @@
 ### Screenshot evidence
 - Before: `app/build/device-screenshots/preview-android16-pgem10.png`
 - Fixed: `app/build/device-screenshots/preview-android16-pgem10-v0511.png`
+
+## 2026-07-23 Photo Preview Transition
+
+### Implemented in this iteration
+- Keep the preview overlay in the Compose hierarchy so opening and closing can both animate instead of appearing or disappearing in one frame.
+- Retain the last preview index until the exit transition finishes, preventing the image from jumping back to the first item while closing.
+- Fade the full preview in and out, then animate the top metadata bar and bottom action bar from their nearest screen edges.
+- Keep horizontal photo paging independent from the page transition so moving between photos does not replay the full-screen entrance.
+- Replaced an intermediate full-screen scale transition after device frame statistics showed that scaling the entire `1440x3168` overlay was unnecessarily expensive.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.13`, `versionCode=45`.
+- Installed `0.5.13 (45)` on CPH2025 device `909e29e1`, reconnected to the camera, and opened the 37-item `2026-7-21` folder.
+- A warm-cache open/close frame-stat run rendered 60 frames with 4 janky frames (6.67%), a 9 ms median, a 15 ms 90th percentile, and no slow bitmap uploads.
+- Confirmed horizontal swipe still advances from `1 / 37` to `2 / 37`.
+- Confirmed the close button completes the exit transition and returns to the 37-item grid.
+- Cleared the Android crash buffer before the regression; no crash entries were produced.

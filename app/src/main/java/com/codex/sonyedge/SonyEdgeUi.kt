@@ -15,6 +15,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -108,7 +110,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -308,18 +312,31 @@ fun SonyEdgeApp(
 
     val previewIndex = state.previewIndex
     val previewItem = previewIndex?.let { state.photos.getOrNull(it) }
-    if (previewItem != null) {
-        PhotoPreview(
-            items = state.photos,
-            currentIndex = previewIndex,
-            selectedKeys = state.selectedKeys,
-            onClose = onClosePreview,
-            onPrevious = { onPreviewNext(-1) },
-            onNext = { onPreviewNext(1) },
-            onPageSettled = onPreviewPage,
-            onSelect = onToggleSelection,
-            onDownload = onDownloadPreview
-        )
+    var retainedPreviewIndex by remember { mutableIntStateOf(previewIndex ?: 0) }
+    SideEffect {
+        if (previewIndex != null && state.photos.isNotEmpty()) {
+            retainedPreviewIndex = previewIndex.coerceIn(state.photos.indices)
+        }
+    }
+    AnimatedVisibility(
+        visible = previewItem != null,
+        modifier = Modifier.fillMaxSize(),
+        enter = fadeIn(animationSpec = tween(220)),
+        exit = fadeOut(animationSpec = tween(160))
+    ) {
+        if (state.photos.isNotEmpty()) {
+            PhotoPreview(
+                items = state.photos,
+                currentIndex = (previewIndex ?: retainedPreviewIndex).coerceIn(state.photos.indices),
+                selectedKeys = state.selectedKeys,
+                onClose = onClosePreview,
+                onPrevious = { onPreviewNext(-1) },
+                onNext = { onPreviewNext(1) },
+                onPageSettled = onPreviewPage,
+                onSelect = onToggleSelection,
+                onDownload = onDownloadPreview
+            )
+        }
     }
 }
 
@@ -1830,8 +1847,11 @@ private fun PhotoPreview(
     BackHandler(onBack = onClose)
     Surface(Modifier.fillMaxSize(), color = PreviewBlack) {
             val context = LocalContext.current.applicationContext
-            var controlsVisible by remember { mutableStateOf(true) }
+            var controlsVisible by remember { mutableStateOf(false) }
             var previewZoomed by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                controlsVisible = true
+            }
             LaunchedEffect(currentIndex) {
                 val target = currentIndex.coerceIn(items.indices)
                 if (pagerState.currentPage != target) {
@@ -1894,8 +1914,10 @@ private fun PhotoPreview(
 
                 AnimatedVisibility(
                     visible = controlsVisible,
-                    enter = fadeIn(tween(180)),
-                    exit = fadeOut(tween(140)),
+                    enter = fadeIn(tween(180)) +
+                        slideInVertically(tween(220)) { -it / 3 },
+                    exit = fadeOut(tween(140)) +
+                        slideOutVertically(tween(160)) { -it / 3 },
                     modifier = Modifier.align(Alignment.TopCenter)
                 ) {
                     Box(
@@ -1927,8 +1949,10 @@ private fun PhotoPreview(
 
                 AnimatedVisibility(
                     visible = controlsVisible,
-                    enter = fadeIn(tween(180)),
-                    exit = fadeOut(tween(140)),
+                    enter = fadeIn(tween(180)) +
+                        slideInVertically(tween(220)) { it / 3 },
+                    exit = fadeOut(tween(140)) +
+                        slideOutVertically(tween(160)) { it / 3 },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
                     Column(
