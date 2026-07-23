@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -100,7 +101,9 @@ data class SonyEdgeUiState(
     val downloadElapsedSeconds: Long = 0,
     val transferEvents: List<String> = emptyList(),
     val failedItems: List<CameraContentItem> = emptyList(),
-    val cameraSelectionStatus: String = "Choose photos on the camera, then receive them here."
+    val cameraSelectionStatus: String = "Camera-selected photos are detected automatically after connection.",
+    val cameraSelectionReceiving: Boolean = false,
+    val cameraSelectionCleanupInProgress: Boolean = false
 ) {
     val shouldHandleBack: Boolean
         get() = previewIndex != null ||
@@ -127,6 +130,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     private var activeSession: SonyCameraSession? = null
     private var activeXPushSession: CameraSelectionSession? = null
     private val pendingXPushGuard = AtomicReference<XPushSessionGuard?>()
+    private val cameraSelectionRequest = AtomicReference<Any?>()
     private val cleared = AtomicBoolean(false)
     private val folderCache = linkedMapOf<String, CachedFolder>()
     private var browseRequestId = 0
@@ -134,11 +138,13 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     private var pendingCameraSsid: String? = null
     private var pendingCameraPassword: String? = null
     private var autoBrowseAfterConnection = false
+    private var awaitingCameraSelectionDisconnect = false
 
     override fun onCleared() {
         cleared.set(true)
         scope.cancel()
         pendingCameraPassword = null
+        cameraSelectionRequest.set(null)
         pendingXPushGuard.getAndSet(null)?.let { abortXPushGuard(it, "ViewModel cleared") }
         // Do not close wifiConnector here: its NetworkSpecifier request must outlive this
         // ViewModel while the foreground DownloadService is still using the camera network.
@@ -168,6 +174,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun connectCameraWifi() {
+        if (blockConnectionChangeWhileTransferActive()) return
         val profile = wifiProfileStore.load()
         if (profile == null) {
             _uiState.update {
@@ -190,6 +197,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun addCamera() {
+        if (blockConnectionChangeWhileTransferActive()) return
         pendingCameraSsid = null
         pendingCameraPassword = null
         _uiState.update {
@@ -205,6 +213,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun submitCameraCredentials(ssid: String, password: String) {
+        if (blockConnectionChangeWhileTransferActive()) return
         val normalizedSsid = ssid.trim()
         if (normalizedSsid.isEmpty()) {
             _uiState.update {
@@ -238,16 +247,17 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun connectCurrentWifi() {
+        if (blockConnectionChangeWhileTransferActive()) return
         verifyCurrentWifi(autoBrowse = false)
     }
 
     fun cancelCameraConnection() {
         connectionRequestId++
-        wifiConnector.cancel()
         pendingCameraSsid = null
         pendingCameraPassword = null
         autoBrowseAfterConnection = false
-        clearCameraSession()
+        val pendingGuard = clearCameraSession(abortPendingSelection = false)
+        releaseCameraWifiAfterSelectionCleanup(pendingGuard, "Camera connection cancelled")
         _uiState.update {
             it.copy(
                 activeTab = SonyEdgeTab.Library,
@@ -265,6 +275,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun forgetCamera() {
+        if (blockConnectionChangeWhileTransferActive()) return
         wifiProfileStore.clear()
         pendingCameraPassword = null
         val connecting = _uiState.value.connectPhase in setOf(
@@ -326,12 +337,18 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun disconnectCamera() {
+        if (isCameraTransferBusy(_uiState.value)) {
+            _uiState.update {
+                it.copy(status = "Cancel or finish the active camera transfer before disconnecting.")
+            }
+            return
+        }
         connectionRequestId++
-        wifiConnector.cancel()
         pendingCameraSsid = null
         pendingCameraPassword = null
         autoBrowseAfterConnection = false
-        clearCameraSession()
+        val pendingGuard = clearCameraSession(abortPendingSelection = false)
+        releaseCameraWifiAfterSelectionCleanup(pendingGuard, "Camera disconnected")
         _uiState.update {
             it.copy(
                 activeTab = SonyEdgeTab.Library,
@@ -420,8 +437,38 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 )
             }
             CameraWifiConnector.Event.Lost -> {
-                failCameraConnection("Camera Wi-Fi connection was lost.", releaseRequestedNetwork = false)
+                if (
+                    awaitingCameraSelectionDisconnect &&
+                    isCameraSelectionTransferTerminal(_uiState.value)
+                ) {
+                    finishCameraSelectionConnection()
+                } else {
+                    failCameraConnection("Camera Wi-Fi connection was lost.", releaseRequestedNetwork = false)
+                }
             }
+        }
+    }
+
+    private fun finishCameraSelectionConnection() {
+        connectionRequestId++
+        pendingCameraSsid = null
+        pendingCameraPassword = null
+        autoBrowseAfterConnection = false
+        clearCameraSession(abortPendingSelection = false)
+        addLog("Camera-selected transfer finished; camera Wi-Fi closed normally.")
+        _uiState.update {
+            it.copy(
+                activeTab = SonyEdgeTab.Transfers,
+                connectionState = ConnectionState.Idle,
+                connectPhase = CameraConnectPhase.Disconnected,
+                connectedCamera = null,
+                credentialsDialogVisible = false,
+                credentialsSsidPrefill = "",
+                connectionHomeVisible = false,
+                status = "Camera-selected transfer complete.",
+                errorMessage = null,
+                loading = false
+            )
         }
     }
 
@@ -452,6 +499,11 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
 
             activeSession = session
             addLog("Connected: ${session.device.friendlyName} ${session.device.modelName}")
+            if (supportsCameraSelection(session)) {
+                val rootFolder = CachedFolder("0", "Camera", emptyList(), emptyList())
+                finishCameraConnection(session, rootFolder)
+                return@launch
+            }
             _uiState.update {
                 it.copy(
                     connectPhase = CameraConnectPhase.PreparingLibrary,
@@ -504,6 +556,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             host = cameraHost(session)
         )
         val shouldAutoBrowse = autoBrowseAfterConnection
+        val shouldAutoReceiveSelection = supportsCameraSelection(session)
         autoBrowseAfterConnection = false
         _uiState.update {
             it.copy(
@@ -516,7 +569,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectedCamera = connectedInfo,
                 credentialsDialogVisible = false,
                 credentialsSsidPrefill = "",
-                connectionHomeVisible = !shouldAutoBrowse,
+                connectionHomeVisible = shouldAutoReceiveSelection || !shouldAutoBrowse,
                 status = "Connected to $modelName.",
                 errorMessage = null,
                 loading = false,
@@ -526,21 +579,27 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 folders = emptyList(),
                 photos = emptyList(),
                 selectedKeys = emptySet(),
-                previewIndex = null
+                previewIndex = null,
+                cameraSelectionReceiving = false
             )
         }
-        if (shouldAutoBrowse) {
+        if (shouldAutoReceiveSelection) {
+            addLog("XPushList advertised; receiving camera-selected photos automatically")
+            receiveCameraSelection(autoTriggered = true)
+        } else if (shouldAutoBrowse) {
             openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
         }
     }
 
     private fun failCameraConnection(message: String, releaseRequestedNetwork: Boolean = true) {
         connectionRequestId++
-        if (releaseRequestedNetwork) wifiConnector.cancel()
         pendingCameraSsid = null
         pendingCameraPassword = null
         autoBrowseAfterConnection = false
-        clearCameraSession()
+        val pendingGuard = clearCameraSession(abortPendingSelection = !releaseRequestedNetwork)
+        if (releaseRequestedNetwork) {
+            releaseCameraWifiAfterSelectionCleanup(pendingGuard, "Camera connection failed")
+        }
         addLog(message)
         _uiState.update {
             it.copy(
@@ -558,11 +617,14 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun clearCameraSession() {
+    private fun clearCameraSession(abortPendingSelection: Boolean = true): XPushSessionGuard? {
         activeSession = null
         activeXPushSession = null
-        pendingXPushGuard.getAndSet(null)?.let {
-            abortXPushGuard(it, "Camera connection reset")
+        awaitingCameraSelectionDisconnect = false
+        cameraSelectionRequest.set(null)
+        val pendingGuard = pendingXPushGuard.getAndSet(null)
+        if (abortPendingSelection) {
+            pendingGuard?.let { abortXPushGuard(it, "Camera connection reset") }
         }
         browseRequestId++
         folderCache.clear()
@@ -574,9 +636,47 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 folders = emptyList(),
                 photos = emptyList(),
                 selectedKeys = emptySet(),
-                previewIndex = null
+                previewIndex = null,
+                cameraSelectionReceiving = false
             )
         }
+        return pendingGuard
+    }
+
+    private fun releaseCameraWifiAfterSelectionCleanup(
+        guard: XPushSessionGuard?,
+        reason: String
+    ) {
+        if (guard == null) {
+            wifiConnector.cancel()
+            return
+        }
+        _uiState.update { it.copy(cameraSelectionCleanupInProgress = true) }
+        XPushNetworkReleaseCoordinator.schedule(
+            guard = guard,
+            reason = reason,
+            log = { message -> Log.w("SonyEdge-XPush", message) }
+        ) {
+            wifiConnector.cancel()
+            _uiState.update {
+                it.copy(cameraSelectionCleanupInProgress = false)
+            }
+        }
+    }
+
+    private fun blockConnectionChangeWhileTransferActive(): Boolean {
+        val state = _uiState.value
+        if (!isCameraTransferBusy(state)) return false
+        _uiState.update {
+            it.copy(
+                status = if (state.cameraSelectionCleanupInProgress) {
+                    "Finishing the previous camera transfer session..."
+                } else {
+                    "Cancel or finish the active camera transfer first."
+                }
+            )
+        }
+        return true
     }
 
     @Suppress("DEPRECATION")
@@ -855,51 +955,107 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun receiveCameraSelection() {
+        receiveCameraSelection(autoTriggered = false)
+    }
+
+    private fun receiveCameraSelection(autoTriggered: Boolean) {
         val session = activeSession
         if (session == null) {
             setError("Connect to the camera Wi-Fi first.", SonyEdgeTab.Settings)
             return
         }
-        setLoading("Waiting for the camera selection...", SonyEdgeTab.Settings)
-        _uiState.update { it.copy(cameraSelectionStatus = "Reading the camera-selected transfer list...") }
+        val requestToken = Any()
+        if (!cameraSelectionRequest.compareAndSet(null, requestToken)) {
+            addLog("Camera selection receive is already active")
+            return
+        }
+        val requestId = connectionRequestId
+        val requestGuard = AtomicReference<XPushSessionGuard?>()
+        _uiState.update {
+            it.copy(
+                activeTab = if (autoTriggered) SonyEdgeTab.Library else SonyEdgeTab.Settings,
+                connectionState = ConnectionState.Connected,
+                connectionHomeVisible = autoTriggered || it.connectionHomeVisible,
+                status = "Waiting for the camera-selected photos...",
+                errorMessage = null,
+                loading = true,
+                cameraSelectionReceiving = true,
+                cameraSelectionStatus = "Reading the camera-selected transfer list..."
+            )
+        }
         scope.launch {
-            runCatching {
+            val result = runCatching {
                 repository.startCameraSelection(
                     session,
                     { addLog(it) },
-                    ::registerXPushGuard
+                    { guard ->
+                        if (requestId == connectionRequestId && activeSession === session) {
+                            requestGuard.set(guard)
+                            registerXPushGuard(guard)
+                        } else {
+                            abortXPushGuard(guard, "Camera connection changed during selection setup")
+                        }
+                    }
                 )
-            }.onSuccess { selection ->
+            }
+            result.onSuccess { selection ->
+                if (requestId != connectionRequestId || activeSession !== session) {
+                    requestGuard.compareAndSet(selection.guard, null)
+                    pendingXPushGuard.compareAndSet(selection.guard, null)
+                    abortXPushGuard(selection.guard, "Stale camera selection result")
+                    addLog("Ignored camera selection from an inactive connection")
+                    return@onSuccess
+                }
                 activeXPushSession = selection
-                browseRequestId++
-                val title = "Camera selection"
-                val cached = CachedFolder(selection.pushRoot, title, emptyList(), selection.items)
-                folderCache[selection.pushRoot] = cached
                 _uiState.update {
                     it.copy(
-                        activeTab = SonyEdgeTab.Library,
                         connectionState = ConnectionState.Connected,
-                        connectionHomeVisible = false,
                         status = "Received ${selection.items.size} camera-selected items.",
                         errorMessage = null,
                         loading = false,
-                        currentFolderId = selection.pushRoot,
-                        currentFolderTitle = title,
-                        folders = emptyList(),
-                        photos = selection.items,
-                        selectedKeys = selection.items.mapTo(linkedSetOf()) { item -> itemKey(item) },
-                        previewIndex = null,
-                        cameraSelectionStatus = "${selection.items.size} items received and selected for import."
+                        cameraSelectionStatus = "${selection.items.size} items received and selected for import.",
+                        cameraSelectionReceiving = false
                     )
                 }
                 startDownload(selection.items)
-            }.onFailure { ex ->
-                pendingXPushGuard.getAndSet(null)?.let {
-                    abortXPushGuard(it, "Camera selection failed after setup cleanup")
-                }
-                _uiState.update { it.copy(cameraSelectionStatus = "Camera selection failed: ${ex.message}") }
-                setError("Camera selection failed: ${ex.message}", SonyEdgeTab.Settings)
             }
+            result.onFailure { ex ->
+                requestGuard.getAndSet(null)?.let { guard ->
+                    pendingXPushGuard.compareAndSet(guard, null)
+                    abortXPushGuard(guard, "Camera selection failed after setup cleanup")
+                }
+                if (requestId != connectionRequestId || activeSession !== session) {
+                    addLog("Ignored camera selection failure from an inactive connection: ${ex.message}")
+                    return@onFailure
+                }
+                val message = "Camera selection failed: ${ex.message}"
+                if (autoTriggered) {
+                    addLog(message)
+                    folderCache.remove("0")
+                    _uiState.update {
+                        it.copy(
+                            activeTab = SonyEdgeTab.Library,
+                            connectionState = ConnectionState.Connected,
+                            connectPhase = CameraConnectPhase.Connected,
+                            connectionHomeVisible = true,
+                            status = "Connected to the camera.",
+                            errorMessage = null,
+                            loading = false,
+                            cameraSelectionStatus = message,
+                            cameraSelectionReceiving = false
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            cameraSelectionStatus = message,
+                            cameraSelectionReceiving = false
+                        )
+                    }
+                    setError(message, SonyEdgeTab.Settings)
+                }
+            }
+            cameraSelectionRequest.compareAndSet(requestToken, null)
         }
     }
 
@@ -929,18 +1085,20 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         try {
             if (usesCameraSelection) {
                 val guard = selection!!.guard
+                awaitingCameraSelectionDisconnect = true
                 if (!guard.handoffToService {
-                        getApplication<Application>().startService(intent)
+                        startDownloadService(intent)
                     }) {
                     throw IllegalStateException("Camera-selected transfer session is no longer active")
                 }
                 pendingXPushGuard.compareAndSet(guard, null)
                 activeXPushSession = null
             } else {
-                getApplication<Application>().startService(intent)
+                startDownloadService(intent)
             }
         } catch (ex: Exception) {
             if (usesCameraSelection) {
+                awaitingCameraSelectionDisconnect = false
                 val guard = selection!!.guard
                 pendingXPushGuard.compareAndSet(guard, null)
                 abortXPushGuard(guard, "Download service handoff failed")
@@ -967,6 +1125,15 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 failedItems = emptyList(),
                 transferEvents = listOf("Queued ${items.size} imports.")
             )
+        }
+    }
+
+    private fun startDownloadService(intent: Intent) {
+        val application = getApplication<Application>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            application.startForegroundService(intent)
+        } else {
+            application.startService(intent)
         }
     }
 
@@ -1285,6 +1452,35 @@ fun cleanTitle(title: String?, fallback: String): String =
 
 fun browseTabFor(state: SonyEdgeUiState): SonyEdgeTab =
     browseTabFor(state.folders, state.photos)
+
+fun supportsCameraSelection(session: SonyCameraSession): Boolean =
+    session.dmsService != null &&
+        session.device.services.any { service ->
+            service.isXPushList() && service.controlUrl.isNotBlank()
+        }
+
+fun isDownloadTransferActive(state: SonyEdgeUiState): Boolean =
+    state.downloadTotal > 0 &&
+        state.downloadProgress < state.downloadTotal &&
+        state.downloadState in setOf(
+            DownloadService.STATE_STARTED,
+            DownloadService.STATE_FILE_STARTED,
+            DownloadService.STATE_FILE_PROGRESS,
+            DownloadService.STATE_FILE_DONE,
+            DownloadService.STATE_FILE_FAILED
+        )
+
+fun isCameraTransferBusy(state: SonyEdgeUiState): Boolean =
+    state.cameraSelectionReceiving ||
+        state.cameraSelectionCleanupInProgress ||
+        isDownloadTransferActive(state)
+
+fun isCameraSelectionTransferTerminal(state: SonyEdgeUiState): Boolean =
+    state.downloadState in setOf(
+        DownloadService.STATE_DONE,
+        DownloadService.STATE_FATAL,
+        DownloadService.STATE_CANCELLED
+    )
 
 private fun isConnectedCameraBrowsing(state: SonyEdgeUiState): Boolean =
     state.connectPhase == CameraConnectPhase.Connected &&

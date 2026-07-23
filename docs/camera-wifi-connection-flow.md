@@ -34,6 +34,15 @@ Every camera HTTP request must hold a binding lease until its response is fully 
 2. Connecting: connect Wi-Fi, verify Sony services, then prepare the camera library.
 3. Connected home: show real model, SSID and host data, then let the user open photos or import history.
 
+After service discovery, the connection flow distinguishes the camera's operating mode from its advertised services:
+
+- `ContentDirectory` without `XPushList`: prepare the normal camera library and show the connected home.
+- `ContentDirectory` with a usable `XPushList`: skip the normal root browse, start the camera-selected transfer automatically, and hand the resulting list directly to `DownloadService`.
+
+The Settings action remains as a diagnostic retry, but automatic and manual receive share one guarded request. Connection generation checks prevent a stale receive from updating a newer connection. If automatic receive fails, the camera remains connected and a later normal browse performs a fresh root request.
+
+During camera-selected transfer setup and download, connection-changing actions are disabled. The XPush list is handed to `DownloadService` as a foreground service, which reports progress and sends `X_TransferEnd` before releasing its Wi-Fi lease. Sony cameras normally close the temporary access point after a terminal transfer; that final network loss preserves the Imports result and is not reported as a connection failure.
+
 The connected home exposes photo browsing and import history. Protocol folders are an implementation detail: Back from a single-day photo grid returns to the visible `Date` list, and Back from the `Date` list returns to the connected home. The internal `Camera` and `PhotoRoot` parents are never exposed.
 
 Users can add a different camera without deleting the remembered one first. The existing encrypted profile is replaced only after the new camera Wi-Fi and Sony services have both been verified. Disconnect releases an app-requested camera network and clears the active camera session while retaining the remembered profile for the next one-tap connection.

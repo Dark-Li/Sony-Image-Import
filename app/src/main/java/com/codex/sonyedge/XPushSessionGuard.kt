@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -83,6 +84,38 @@ object XPushCleanupCoordinator {
                 }
             } finally {
                 scheduled.remove(guard)
+            }
+        }
+    }
+}
+
+/** Keeps the requested camera network alive until a pending XPush session has ended. */
+object XPushNetworkReleaseCoordinator {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scheduled = Collections.newSetFromMap(
+        ConcurrentHashMap<XPushSessionGuard, Boolean>()
+    )
+    private val retryDelaysMs = longArrayOf(0, 500, 1_000, 2_000, 4_000)
+
+    fun schedule(
+        guard: XPushSessionGuard,
+        reason: String,
+        log: (String) -> Unit,
+        releaseNetwork: () -> Unit
+    ) {
+        if (!scheduled.add(guard)) return
+        scope.launch {
+            try {
+                for ((attempt, retryDelay) in retryDelaysMs.withIndex()) {
+                    if (retryDelay > 0) delay(retryDelay)
+                    if (!guard.needsAbort() || guard.abort(reason, log)) break
+                    log("XPush network release cleanup retry ${attempt + 1}/${retryDelaysMs.size}")
+                }
+            } finally {
+                scheduled.remove(guard)
+                withContext(Dispatchers.Main.immediate) {
+                    releaseNetwork()
+                }
             }
         }
     }

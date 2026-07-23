@@ -430,3 +430,32 @@
 - Opened `DSC06913.JPG`; its 888,917-byte `LRG_DSC06913.JPG` preview loaded in under one second and replaced the loading state.
 - Imported the original `DSC06913.JPG`: 36,012,032-byte JPEG, 1 success, 0 failures.
 - After the download released its Wi-Fi lease, scrolled to uncached photos and confirmed another set of thumbnail requests loaded successfully.
+
+## 2026-07-23 Automatic Camera Selection Detection
+
+### Implemented in this iteration
+- Detect camera-side selection mode from `XPushList + ContentDirectory` service advertisement immediately after connection discovery.
+- Skip the normal DMS root preload in camera-selection mode and start the existing XPush receive/import flow automatically.
+- Keep normal connected-home browsing unchanged when `XPushList` is absent.
+- Share one guarded receive request between automatic detection and the Settings diagnostic action.
+- Reject stale results after disconnect/reconnect and keep each request scoped to its own XPush guard.
+- Show a receiving state on the connected home and disable the manual receive action while setup is active.
+- Attempt `X_TransferEnd` before releasing the requested camera Wi-Fi when cancelling or disconnecting an active setup.
+- Start the download handoff as a foreground service on Android 8 and newer.
+- Treat the camera closing its Wi-Fi after a terminal XPush transfer as a normal completion, preserving the Imports result instead of showing a connection error.
+
+### Verification status
+- Capability detection unit tests cover usable XPush, missing control URL, and missing ContentDirectory.
+- Transfer-state unit tests cover active, completed, cancelled, and fatal download states.
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.7`, `versionCode=39`.
+- Installed successfully on ADB device `909e29e1` and connected to `DIRECT-leE1:ILCE-7RM3`.
+- In camera-side selection mode, discovery advertised both `ContentDirectory` and `XPushList`; SonyEdge automatically executed `X_TransferStart`, `X_GetPushRoot`, and browsed `PushRoot` without opening Settings.
+- Imported `DSC06885.JPG`: 21,037,056-byte JPEG, 1 success, 0 failures, saved to `DCIM/Sony Picture`.
+- Confirmed `X_TransferProgress 1/1` and `X_TransferEnd errCode=0` both returned HTTP 200.
+- After the camera closed its Wi-Fi, SonyEdge remained on the Imports page with `Import complete`, while Android returned to the previous home Wi-Fi.
+- Crash log buffer was empty after the transfer.
+- In normal camera-browse mode, the same camera advertised three services without `XPushList`; SonyEdge did not start XPush and followed the DMS browsing path.
+- Confirmed automatic navigation through `PhotoRoot / Date`, six visible date folders, and a 76-photo folder loaded in three DMS pages.
+- Confirmed the visible three-column grid loaded its thumbnail resources through the camera network.
+- Opened `DSC06822.JPG`; its 578,433-byte `LRG_DSC06822.JPG` preview loaded successfully.
+- Crash log buffer remained empty after the normal browse regression.

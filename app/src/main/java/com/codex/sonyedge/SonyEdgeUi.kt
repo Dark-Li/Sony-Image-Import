@@ -603,6 +603,7 @@ private fun DisconnectedCameraState(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = onConnectCameraWifi,
+            enabled = !isCameraTransferBusy(state),
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -618,6 +619,7 @@ private fun DisconnectedCameraState(
         if (remembered != null) {
             OutlinedButton(
                 onClick = onAddCamera,
+                enabled = !isCameraTransferBusy(state),
                 modifier = Modifier.fillMaxWidth().height(46.dp),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -629,6 +631,7 @@ private fun DisconnectedCameraState(
         }
         TextButton(
             onClick = onConnectCurrentWifi,
+            enabled = !isCameraTransferBusy(state),
             modifier = Modifier.fillMaxWidth().height(42.dp),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -805,24 +808,29 @@ private fun ConnectedCameraHome(
             }
         }
         Spacer(Modifier.height(4.dp))
-        CameraHomeAction(
-            title = "浏览相机照片",
-            subtitle = "查看并选择要导入的照片",
-            icon = Icons.Default.Folder,
-            tone = SonyBlueSoft,
-            iconTint = SonyBlue,
-            onClick = onBrowsePhotos
-        )
-        CameraHomeAction(
-            title = "传输记录",
-            subtitle = "查看导入历史和状态",
-            icon = Icons.Default.CloudDownload,
-            tone = SurfaceSoft,
-            iconTint = TextMuted,
-            onClick = onOpenImports
-        )
+        if (state.cameraSelectionReceiving) {
+            CameraSelectionReceivingCard(state.cameraSelectionStatus)
+        } else {
+            CameraHomeAction(
+                title = "浏览相机照片",
+                subtitle = "查看并选择要导入的照片",
+                icon = Icons.Default.Folder,
+                tone = SonyBlueSoft,
+                iconTint = SonyBlue,
+                onClick = onBrowsePhotos
+            )
+            CameraHomeAction(
+                title = "传输记录",
+                subtitle = "查看导入历史和状态",
+                icon = Icons.Default.CloudDownload,
+                tone = SurfaceSoft,
+                iconTint = TextMuted,
+                onClick = onOpenImports
+            )
+        }
         TextButton(
             onClick = onDisconnect,
+            enabled = !isCameraTransferBusy(state),
             modifier = Modifier.align(Alignment.CenterHorizontally),
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.textButtonColors(contentColor = TextMuted)
@@ -830,6 +838,34 @@ private fun ConnectedCameraHome(
             Icon(Icons.Default.WifiOff, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("断开连接", maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun CameraSelectionReceivingCard(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = SonyBlueSoft,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, SonyBlue.copy(alpha = 0.25f))
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("正在接收相机选中的照片", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(
+                    message,
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -1231,7 +1267,10 @@ private fun SettingsScreen(
                         )
                         Text(camera.ssid, color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    TextButton(onClick = onForgetCamera) { Text("Forget", maxLines = 1) }
+                    TextButton(
+                        onClick = onForgetCamera,
+                        enabled = !isCameraTransferBusy(state)
+                    ) { Text("Forget", maxLines = 1) }
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -1248,6 +1287,7 @@ private fun SettingsScreen(
                 Icons.Default.Wifi,
                 onConnect,
                 Modifier.fillMaxWidth(),
+                enabled = !isCameraTransferBusy(state),
                 primary = true
             )
         }
@@ -1260,10 +1300,11 @@ private fun SettingsScreen(
             iconTint = SonyBlue
         ) {
             ToolbarButton(
-                "Receive camera selection",
+                if (state.cameraSelectionReceiving) "Receiving camera selection" else "Receive camera selection",
                 Icons.Default.CloudDownload,
                 onReceiveCameraSelection,
                 Modifier.fillMaxWidth(),
+                enabled = !isCameraTransferBusy(state),
                 primary = false
             )
         }
