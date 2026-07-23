@@ -488,3 +488,24 @@
 ### Screenshot evidence
 - `app/build/device-screenshots/qr-first-browse-v059.png`
 - `app/build/device-screenshots/qr-first-preview-v059.png`
+
+## 2026-07-23 Android 16 Preview Window Compatibility
+
+### Root cause and implementation
+- Reproduced the clipped photo-preview controls on OPPO `PGEM10`, Android 16, at `1440x3168` with a `640 dpi` display-density override.
+- UI Automator showed the preview action nodes extending to the physical bottom edge, leaving most of the controls outside the visible screen.
+- Window diagnostics showed the full-screen Compose `Dialog` receiving an incompatible surface/content measurement on this ColorOS build.
+- Changing only `decorFitsSystemWindows` in the intermediate `0.5.10 (42)` build did not correct the layout.
+- Replaced the platform full-screen `Dialog` with an Activity-owned full-screen Compose overlay and added `BackHandler` so system Back still closes the preview.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.11`, `versionCode=43`.
+- Installed `0.5.11 (43)` on device `a109cf4`, reconnected to `DIRECT-leE1:ILCE-7RM3`, opened the 37-item `2026-7-21` folder, and loaded `DSC06913.JPG`.
+- Confirmed the previous, import, select, and next controls are fully visible. Their lowest UI Automator bound is `y=3124`, within the `3168 px` display.
+- Confirmed both the next button and a horizontal swipe advance from `1 / 37` to `2 / 37`.
+- Confirmed system Back returns from the preview to the 37-item grid.
+- Cleared the Android crash buffer before the final interaction regression; no crash entries were produced.
+
+### Screenshot evidence
+- Before: `app/build/device-screenshots/preview-android16-pgem10.png`
+- Fixed: `app/build/device-screenshots/preview-android16-pgem10-v0511.png`

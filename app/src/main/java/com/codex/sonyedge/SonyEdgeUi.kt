@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.util.Log
 import android.util.LruCache
 import android.view.View
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
@@ -136,8 +137,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -1828,14 +1827,8 @@ private fun PhotoPreview(
             }
         }
     }
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        Surface(Modifier.fillMaxSize(), color = PreviewBlack) {
+    BackHandler(onBack = onClose)
+    Surface(Modifier.fillMaxSize(), color = PreviewBlack) {
             val context = LocalContext.current.applicationContext
             var controlsVisible by remember { mutableStateOf(true) }
             var previewZoomed by remember { mutableStateOf(false) }
@@ -1994,7 +1987,6 @@ private fun PhotoPreview(
                     }
                 }
             }
-        }
     }
 }
 
