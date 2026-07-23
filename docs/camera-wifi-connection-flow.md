@@ -30,7 +30,7 @@ Every camera HTTP request must hold a binding lease until its response is fully 
 
 ## UI states
 
-1. Disconnected: connect a saved camera, enter first-use credentials, or browse an already-connected camera network.
+1. Disconnected: scan the camera QR code on first use, connect a saved camera, or browse an already-connected camera network.
 2. Connecting: connect Wi-Fi, verify Sony services, then prepare the camera library.
 3. Connected home: show real model, SSID and host data, then let the user open photos or import history.
 
@@ -48,6 +48,22 @@ The connected home exposes photo browsing and import history. Protocol folders a
 Users can add a different camera without deleting the remembered one first. The existing encrypted profile is replaced only after the new camera Wi-Fi and Sony services have both been verified. Disconnect releases an app-requested camera network and clears the active camera session while retaining the remembered profile for the next one-tap connection.
 
 Passwords never enter `SonyEdgeUiState`, logs, saved instance state, or diagnostics. SharedPreferences only store AES-GCM ciphertext and its IV; the key remains in Android Keystore. App backup is disabled so encrypted preference data cannot be restored without its device-bound key.
+
+## First-use QR connection
+
+Sony cameras expose first-use Wi-Fi credentials with this payload shape:
+
+```text
+W01:S:<ssid-suffix>;P:<password>;C:<camera-model>;M:<camera-identity>;
+```
+
+SonyEdge constructs the access-point name as `DIRECT-<ssid-suffix>:<camera-model>`, then requests it through `WifiNetworkSpecifier`. The parser requires all four fields, preserves the password exactly, normalizes the camera identity to a 12-character uppercase hexadecimal value, and never logs the raw QR payload or password.
+
+After Android provides the requested network, SonyEdge performs an informational probe of the common Sony endpoint at `192.168.122.1:64321`, then always continues to SSDP service discovery. The fixed address is not a compatibility gate because older Sony models may advertise another address or port.
+
+When the discovered UDN contains a device identity, it must match the QR `M` value. Credentials are saved only after that identity check, Sony service discovery, and normal library preparation have succeeded. The saved profile contains the model, SSID, encrypted password, and camera identity; later connections use the same profile for one-tap access.
+
+Manual SSID/password entry is hidden initially. It becomes available only after a scan is cancelled, the QR payload is invalid, or a QR-initiated Wi-Fi/service connection fails. Connecting an already joined camera Wi-Fi remains available as a separate compatibility path.
 
 ## Compatibility behavior
 

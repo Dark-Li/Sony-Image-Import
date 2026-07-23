@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
@@ -184,6 +185,7 @@ fun SonyEdgeApp(
     state: SonyEdgeUiState,
     onTab: (SonyEdgeTab) -> Unit,
     onConnectCameraWifi: () -> Unit,
+    onScanCameraQr: () -> Unit,
     onSubmitCameraCredentials: (String, String) -> Unit,
     onDismissCameraCredentials: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
@@ -246,6 +248,7 @@ fun SonyEdgeApp(
                                     state = state,
                                     expanded = expanded,
                                     onConnectCameraWifi = onConnectCameraWifi,
+                                    onScanCameraQr = onScanCameraQr,
                                     onConnectCurrentWifi = onConnectCurrentWifi,
                                     onCancelCameraConnection = onCancelCameraConnection,
                                     onAddCamera = onAddCamera,
@@ -437,6 +440,7 @@ private fun LibraryScreen(
     state: SonyEdgeUiState,
     expanded: Boolean,
     onConnectCameraWifi: () -> Unit,
+    onScanCameraQr: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
     onCancelCameraConnection: () -> Unit,
     onAddCamera: () -> Unit,
@@ -458,6 +462,7 @@ private fun LibraryScreen(
                 state = state,
                 expanded = expanded,
                 onConnectCameraWifi = onConnectCameraWifi,
+                onScanCameraQr = onScanCameraQr,
                 onConnectCurrentWifi = onConnectCurrentWifi,
                 onCancel = onCancelCameraConnection,
                 onAddCamera = onAddCamera,
@@ -524,6 +529,7 @@ private fun CameraConnectionHome(
     state: SonyEdgeUiState,
     expanded: Boolean,
     onConnectCameraWifi: () -> Unit,
+    onScanCameraQr: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
     onCancel: () -> Unit,
     onAddCamera: () -> Unit,
@@ -554,6 +560,7 @@ private fun CameraConnectionHome(
             state = state,
             expanded = expanded,
             onConnectCameraWifi = onConnectCameraWifi,
+            onScanCameraQr = onScanCameraQr,
             onConnectCurrentWifi = onConnectCurrentWifi,
             onAddCamera = onAddCamera
         )
@@ -565,6 +572,7 @@ private fun DisconnectedCameraState(
     state: SonyEdgeUiState,
     expanded: Boolean,
     onConnectCameraWifi: () -> Unit,
+    onScanCameraQr: () -> Unit,
     onConnectCurrentWifi: () -> Unit,
     onAddCamera: () -> Unit
 ) {
@@ -602,7 +610,7 @@ private fun DisconnectedCameraState(
         )
         Spacer(Modifier.height(24.dp))
         Button(
-            onClick = onConnectCameraWifi,
+            onClick = if (remembered == null) onScanCameraQr else onConnectCameraWifi,
             enabled = !isCameraTransferBusy(state),
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(8.dp)
@@ -610,7 +618,7 @@ private fun DisconnectedCameraState(
             Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
             Text(
-                cameraLabel?.let { "连接 $it" } ?: "连接相机 Wi-Fi",
+                cameraLabel?.let { "连接 $it" } ?: "扫描相机二维码",
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -618,14 +626,27 @@ private fun DisconnectedCameraState(
         Spacer(Modifier.height(10.dp))
         if (remembered != null) {
             OutlinedButton(
-                onClick = onAddCamera,
+                onClick = onScanCameraQr,
                 enabled = !isCameraTransferBusy(state),
                 modifier = Modifier.fillMaxWidth().height(46.dp),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("连接其他相机", maxLines = 1)
+                Text("扫描其他相机", maxLines = 1)
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        if (state.manualCredentialsAvailable) {
+            TextButton(
+                onClick = onAddCamera,
+                enabled = !isCameraTransferBusy(state),
+                modifier = Modifier.fillMaxWidth().height(42.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("手动输入 Wi-Fi 信息", maxLines = 1)
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -656,7 +677,7 @@ private fun DisconnectedCameraState(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("如何连接", fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Text("在相机中打开“发送到智能手机”，首次连接输入屏幕上的 Wi-Fi 信息。", color = TextMuted, fontSize = 12.sp, maxLines = 2)
+                    Text("在相机中打开“发送到智能手机”，首次连接扫描屏幕上的二维码。", color = TextMuted, fontSize = 12.sp, maxLines = 2)
                 }
             }
         }

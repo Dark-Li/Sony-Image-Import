@@ -459,3 +459,32 @@
 - Confirmed the visible three-column grid loaded its thumbnail resources through the camera network.
 - Opened `DSC06822.JPG`; its 578,433-byte `LRG_DSC06822.JPG` preview loaded successfully.
 - Crash log buffer remained empty after the normal browse regression.
+
+## 2026-07-23 First-use Camera QR Connection
+
+### Implemented in this iteration
+- Added offline Sony Wi-Fi QR scanning with ZXing Android Embedded.
+- Parse `W01` payloads into the `DIRECT-<suffix>:<model>` SSID, password, model, and camera identity.
+- Use the existing Android `WifiNetworkSpecifier` connection path after a successful scan.
+- Probe the common `192.168.122.1:64321` endpoint before SSDP without making it a compatibility requirement.
+- Verify the scanned camera identity against the SSDP device UDN when that identity is advertised.
+- Store the camera identity beside the existing Keystore-encrypted Wi-Fi profile after service verification succeeds.
+- Keep manual SSID/password entry hidden until QR scanning or QR-initiated connection fails.
+- Preserve one-tap reconnect for a successfully remembered camera.
+
+### Verification status
+- Sony QR parser unit tests cover the supplied A7R III payload, separated identity normalization, invalid prefixes, missing and duplicate fields, invalid identities, and UDN identity extraction.
+- `:app:testDebugUnitTest`, `:app:compileDebugKotlin`, and `:app:assembleDebug` succeeded.
+- The first installed scanner build exposed ZXing's default landscape orientation, so a project-owned portrait capture activity was added for the follow-up `versionName=0.5.9`, `versionCode=41` build.
+- Installed `0.5.9 (41)` on device `909e29e1` and completed a first-use scan after removing the previous saved camera.
+- Scanned the camera's real QR code in portrait orientation and connected to `DIRECT-leE1:ILCE-7RM3`; discovery resolved the camera service at `192.168.122.1`.
+- Confirmed the saved profile contains model `ILCE-7RM3`, identity `E8E8B7349C13`, and the SSID. The Wi-Fi password is stored only as Android Keystore AES-GCM ciphertext and an initialization vector.
+- Browsed `PhotoRoot / Date`, opened the 37-item `2026-7-21` folder, loaded the three-column thumbnail grid, and opened the large preview for `DSC06913.JPG`.
+- Imported the 34.3 MB `DSC06913.JPG` original to `DCIM/Sony Picture`: 1 imported, 0 failed, about 1.4 MB/s over 25 seconds.
+- Disconnected, returned to the normal phone Wi-Fi, and reconnected to the remembered camera with one tap and without reopening the scanner.
+- Cancelled a later "scan another camera" attempt and confirmed manual SSID/password entry became available only after that scan failure.
+- Android's crash log buffer remained empty after the complete connection, browse, preview, download, disconnect, reconnect, and fallback regression.
+
+### Screenshot evidence
+- `app/build/device-screenshots/qr-first-browse-v059.png`
+- `app/build/device-screenshots/qr-first-preview-v059.png`

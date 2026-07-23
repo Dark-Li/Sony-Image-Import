@@ -18,7 +18,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.InetSocketAddress
 import java.net.URI
+import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -75,6 +77,7 @@ data class SonyEdgeUiState(
     val connectedCamera: ConnectedCameraInfo? = null,
     val credentialsDialogVisible: Boolean = false,
     val credentialsSsidPrefill: String = "",
+    val manualCredentialsAvailable: Boolean = false,
     val connectionHomeVisible: Boolean = false,
     val status: String = "Connect to the camera Wi-Fi, then browse.",
     val errorMessage: String? = null,
@@ -137,6 +140,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     private var connectionRequestId = 0
     private var pendingCameraSsid: String? = null
     private var pendingCameraPassword: String? = null
+    private var pendingCameraIdentity: String? = null
+    private var pendingCameraModel: String? = null
+    private var pendingConnectionFromQr = false
     private var autoBrowseAfterConnection = false
     private var awaitingCameraSelectionDisconnect = false
 
@@ -144,6 +150,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         cleared.set(true)
         scope.cancel()
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         cameraSelectionRequest.set(null)
         pendingXPushGuard.getAndSet(null)?.let { abortXPushGuard(it, "ViewModel cleared") }
         // Do not close wifiConnector here: its NetworkSpecifier request must outlive this
@@ -180,11 +189,13 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             _uiState.update {
                 it.copy(
                     activeTab = SonyEdgeTab.Library,
-                    connectPhase = CameraConnectPhase.WaitingForCredentials,
-                    credentialsDialogVisible = true,
+                    connectPhase = CameraConnectPhase.Disconnected,
+                    credentialsDialogVisible = false,
                     credentialsSsidPrefill = "",
+                    manualCredentialsAvailable = true,
                     connectionHomeVisible = false,
-                    errorMessage = null,
+                    status = "Scan the camera QR code to connect.",
+                    errorMessage = "No saved camera. Scan its QR code or use manual Wi-Fi entry.",
                     loading = false
                 )
             }
@@ -193,19 +204,70 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         _uiState.update {
             it.copy(rememberedCamera = RememberedCamera(profile.ssid, profile.cameraModel))
         }
-        requestCameraWifi(profile.ssid, profile.password, autoBrowse = false)
+        requestCameraWifi(
+            ssid = profile.ssid,
+            password = profile.password,
+            autoBrowse = false,
+            cameraIdentity = profile.cameraIdentity,
+            cameraModel = profile.cameraModel,
+        )
+    }
+
+    fun submitCameraQrCode(rawValue: String?) {
+        if (blockConnectionChangeWhileTransferActive()) return
+        val payload = runCatching {
+            require(!rawValue.isNullOrBlank()) { "No QR code was captured." }
+            SonyWifiQrParser.parse(rawValue)
+        }.getOrElse { error ->
+            pendingConnectionFromQr = false
+            _uiState.update {
+                it.copy(
+                    activeTab = SonyEdgeTab.Library,
+                    connectionState = ConnectionState.Error,
+                    connectPhase = CameraConnectPhase.Failed,
+                    credentialsDialogVisible = false,
+                    manualCredentialsAvailable = true,
+                    connectionHomeVisible = false,
+                    status = "Camera QR scan failed.",
+                    errorMessage = error.message ?: "Unable to read the Sony camera QR code.",
+                    loading = false,
+                )
+            }
+            return
+        }
+
+        addLog("Sony camera QR parsed for ${payload.cameraModel}; identity=${payload.cameraIdentity}")
+        _uiState.update {
+            it.copy(
+                manualCredentialsAvailable = false,
+                errorMessage = null,
+                status = "Sony camera QR code recognized.",
+            )
+        }
+        requestCameraWifi(
+            ssid = payload.ssid,
+            password = payload.password,
+            autoBrowse = false,
+            cameraIdentity = payload.cameraIdentity,
+            cameraModel = payload.cameraModel,
+            fromQr = true,
+        )
     }
 
     fun addCamera() {
         if (blockConnectionChangeWhileTransferActive()) return
         pendingCameraSsid = null
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         _uiState.update {
             it.copy(
                 activeTab = SonyEdgeTab.Library,
                 connectPhase = CameraConnectPhase.WaitingForCredentials,
                 credentialsDialogVisible = true,
                 credentialsSsidPrefill = "",
+                manualCredentialsAvailable = true,
                 errorMessage = null,
                 loading = false
             )
@@ -227,12 +289,19 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             }
             return
         }
-        requestCameraWifi(normalizedSsid, password, autoBrowse = false)
+        requestCameraWifi(
+            ssid = normalizedSsid,
+            password = password,
+            autoBrowse = false,
+        )
     }
 
     fun dismissCameraCredentials() {
         pendingCameraSsid = null
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         val connected = activeSession != null
         _uiState.update {
             it.copy(
@@ -255,6 +324,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         connectionRequestId++
         pendingCameraSsid = null
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         autoBrowseAfterConnection = false
         val pendingGuard = clearCameraSession(abortPendingSelection = false)
         releaseCameraWifiAfterSelectionCleanup(pendingGuard, "Camera connection cancelled")
@@ -278,6 +350,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         if (blockConnectionChangeWhileTransferActive()) return
         wifiProfileStore.clear()
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         val connecting = _uiState.value.connectPhase in setOf(
             CameraConnectPhase.RequestingWifi,
             CameraConnectPhase.VerifyingCamera,
@@ -346,6 +421,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         connectionRequestId++
         pendingCameraSsid = null
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         autoBrowseAfterConnection = false
         val pendingGuard = clearCameraSession(abortPendingSelection = false)
         releaseCameraWifiAfterSelectionCleanup(pendingGuard, "Camera disconnected")
@@ -383,11 +461,21 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         verifyCurrentWifi(autoBrowse = true)
     }
 
-    private fun requestCameraWifi(ssid: String, password: String, autoBrowse: Boolean) {
+    private fun requestCameraWifi(
+        ssid: String,
+        password: String,
+        autoBrowse: Boolean,
+        cameraIdentity: String? = null,
+        cameraModel: String? = null,
+        fromQr: Boolean = false,
+    ) {
         val requestId = ++connectionRequestId
         clearCameraSession()
         pendingCameraSsid = ssid
         pendingCameraPassword = password
+        pendingCameraIdentity = cameraIdentity
+        pendingCameraModel = cameraModel
+        pendingConnectionFromQr = fromQr
         autoBrowseAfterConnection = autoBrowse
         _uiState.update {
             it.copy(
@@ -397,6 +485,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectedCamera = null,
                 credentialsDialogVisible = false,
                 credentialsSsidPrefill = "",
+                manualCredentialsAvailable = false,
                 connectionHomeVisible = true,
                 status = "Connecting to camera Wi-Fi...",
                 errorMessage = null,
@@ -416,10 +505,15 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
 
     private fun verifyCurrentWifi(autoBrowse: Boolean) {
         val requestId = ++connectionRequestId
+        val profile = wifiProfileStore.load()
         pendingCameraSsid = currentWifiSsid()
-            ?: wifiProfileStore.load()?.ssid
+            ?: profile?.ssid
             ?: "Camera Wi-Fi"
         pendingCameraPassword = null
+        val matchingProfile = profile?.takeIf { it.ssid == pendingCameraSsid }
+        pendingCameraIdentity = matchingProfile?.cameraIdentity
+        pendingCameraModel = matchingProfile?.cameraModel
+        pendingConnectionFromQr = false
         autoBrowseAfterConnection = autoBrowse
         clearCameraSession()
         verifyCameraAndPrepare(requestId)
@@ -453,6 +547,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         connectionRequestId++
         pendingCameraSsid = null
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         autoBrowseAfterConnection = false
         clearCameraSession(abortPendingSelection = false)
         addLog("Camera-selected transfer finished; camera Wi-Fi closed normally.")
@@ -497,6 +594,30 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 }
             if (requestId != connectionRequestId) return@launch
 
+            val expectedIdentity = pendingCameraIdentity
+            val discoveredIdentity = SonyWifiQrParser.cameraIdentityFromUdn(session.device.udn)
+            if (
+                expectedIdentity != null &&
+                discoveredIdentity != null &&
+                expectedIdentity != discoveredIdentity
+            ) {
+                addLog(
+                    "Connected Sony camera identity did not match the scanned QR code " +
+                        "(expected=$expectedIdentity, discovered=$discoveredIdentity)"
+                )
+                failCameraConnection("The connected Sony camera does not match the scanned QR code.")
+                return@launch
+            }
+            if (expectedIdentity != null) {
+                addLog(
+                    if (discoveredIdentity == null) {
+                        "Sony camera identity was not advertised; continuing with service verification"
+                    } else {
+                        "Sony camera identity verified: $discoveredIdentity"
+                    }
+                )
+            }
+
             activeSession = session
             addLog("Connected: ${session.device.friendlyName} ${session.device.modelName}")
             if (supportsCameraSelection(session)) {
@@ -529,18 +650,27 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val ssid = pendingCameraSsid?.takeIf { it.isNotBlank() }
             ?: wifiProfileStore.load()?.ssid
             ?: "Camera Wi-Fi"
-        val modelName = resolveCameraModel(
-            modelNumber = session.device.modelNumber,
-            modelName = session.device.modelName,
-            friendlyName = session.device.friendlyName,
-            ssid = ssid
-        )
+        val modelName = pendingCameraModel?.takeIf { it.isNotBlank() }
+            ?: resolveCameraModel(
+                modelNumber = session.device.modelNumber,
+                modelName = session.device.modelName,
+                friendlyName = session.device.friendlyName,
+                ssid = ssid
+            )
         val friendlyName = session.device.friendlyName.ifBlank { modelName }
         val password = pendingCameraPassword
         val existingProfile = wifiProfileStore.load()
         val savedProfile = when {
-            password != null -> CameraWifiProfileStore.CameraWifiProfile(modelName, ssid, password)
-            existingProfile != null -> existingProfile.copy(cameraModel = modelName)
+            password != null -> CameraWifiProfileStore.CameraWifiProfile(
+                cameraModel = modelName,
+                ssid = ssid,
+                password = password,
+                cameraIdentity = pendingCameraIdentity ?: existingProfile?.cameraIdentity,
+            )
+            existingProfile != null -> existingProfile.copy(
+                cameraModel = modelName,
+                cameraIdentity = pendingCameraIdentity ?: existingProfile.cameraIdentity,
+            )
             else -> null
         }
         if (savedProfile != null) {
@@ -548,6 +678,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 .onFailure { addLog("Unable to update saved camera profile: ${it.message}") }
         }
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
 
         val connectedInfo = ConnectedCameraInfo(
             ssid = ssid,
@@ -569,6 +702,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectedCamera = connectedInfo,
                 credentialsDialogVisible = false,
                 credentialsSsidPrefill = "",
+                manualCredentialsAvailable = false,
                 connectionHomeVisible = shouldAutoReceiveSelection || !shouldAutoBrowse,
                 status = "Connected to $modelName.",
                 errorMessage = null,
@@ -592,9 +726,13 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun failCameraConnection(message: String, releaseRequestedNetwork: Boolean = true) {
+        val exposeManualFallback = pendingConnectionFromQr
         connectionRequestId++
         pendingCameraSsid = null
         pendingCameraPassword = null
+        pendingCameraIdentity = null
+        pendingCameraModel = null
+        pendingConnectionFromQr = false
         autoBrowseAfterConnection = false
         val pendingGuard = clearCameraSession(abortPendingSelection = !releaseRequestedNetwork)
         if (releaseRequestedNetwork) {
@@ -609,6 +747,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectedCamera = null,
                 credentialsDialogVisible = false,
                 credentialsSsidPrefill = "",
+                manualCredentialsAvailable = it.manualCredentialsAvailable || exposeManualFallback,
                 connectionHomeVisible = false,
                 status = message,
                 errorMessage = message,
@@ -1269,6 +1408,19 @@ class SonyCameraRepository(private val context: Context) {
 
     suspend fun connect(log: (String) -> Unit): SonyCameraSession = withContext(Dispatchers.IO) {
         withWifiNetwork(context, log) {
+            val defaultHostDetected = runCatching {
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress(DEFAULT_CAMERA_HOST, DEFAULT_CAMERA_PORT), 900)
+                }
+                true
+            }.getOrDefault(false)
+            log(
+                if (defaultHostDetected) {
+                    "Sony camera host detected at $DEFAULT_CAMERA_HOST:$DEFAULT_CAMERA_PORT"
+                } else {
+                    "Default Sony host $DEFAULT_CAMERA_HOST:$DEFAULT_CAMERA_PORT was not detected; continuing with SSDP"
+                }
+            )
             var devices = discoverAndLog(discoveryClient, log)
             var device = chooseDevice(devices)
                 ?: throw IllegalStateException("No Sony camera services discovered over SSDP")
@@ -1297,6 +1449,11 @@ class SonyCameraRepository(private val context: Context) {
             }
             session
         }
+    }
+
+    private companion object {
+        const val DEFAULT_CAMERA_HOST = "192.168.122.1"
+        const val DEFAULT_CAMERA_PORT = 64321
     }
 
     suspend fun browse(session: SonyCameraSession, folderId: String, log: (String) -> Unit): DmsBrowseResult =

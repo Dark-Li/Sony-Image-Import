@@ -38,6 +38,7 @@ class CameraWifiProfileStore(context: Context) {
             ).toString(Charsets.UTF_8)
             CameraWifiProfile(
                 cameraModel = preferences.getString(KEY_CAMERA_MODEL, null),
+                cameraIdentity = preferences.getString(KEY_CAMERA_IDENTITY, null),
                 ssid = ssid,
                 password = password,
             )
@@ -56,6 +57,7 @@ class CameraWifiProfileStore(context: Context) {
 
         preferences.edit()
             .putString(KEY_CAMERA_MODEL, profile.cameraModel?.trim()?.takeIf { it.isNotEmpty() })
+            .putString(KEY_CAMERA_IDENTITY, profile.cameraIdentity?.trim()?.takeIf { it.isNotEmpty() })
             .putString(KEY_SSID, profile.ssid.trim())
             .putString(
                 KEY_ENCRYPTED_PASSWORD,
@@ -108,14 +110,16 @@ class CameraWifiProfileStore(context: Context) {
         val cameraModel: String?,
         val ssid: String,
         val password: String,
+        val cameraIdentity: String? = null,
     ) {
         override fun toString(): String =
-            "CameraWifiProfile(cameraModel=$cameraModel, ssid=$ssid, password=<redacted>)"
+            "CameraWifiProfile(cameraModel=$cameraModel, cameraIdentity=$cameraIdentity, ssid=$ssid, password=<redacted>)"
     }
 
     private companion object {
         const val PREFERENCES_NAME = "camera_wifi_profile"
         const val KEY_CAMERA_MODEL = "camera_model"
+        const val KEY_CAMERA_IDENTITY = "camera_identity"
         const val KEY_SSID = "ssid"
         const val KEY_ENCRYPTED_PASSWORD = "encrypted_password"
         const val KEY_INITIALIZATION_VECTOR = "initialization_vector"

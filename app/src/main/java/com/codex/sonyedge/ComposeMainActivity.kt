@@ -16,10 +16,17 @@ import androidx.activity.compose.setContent
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModelProvider
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 class ComposeMainActivity : ComponentActivity() {
     private lateinit var viewModel: SonyEdgeViewModel
     private var downloadReceiver: BroadcastReceiver? = null
+    private val qrScanner = registerForActivityResult(ScanContract()) { result ->
+        if (::viewModel.isInitialized) {
+            viewModel.submitCameraQrCode(result.contents)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +45,14 @@ class ComposeMainActivity : ComponentActivity() {
             SonyEdgeApp(
                 state = state,
                 onTab = viewModel::selectTab,
-                onConnectCameraWifi = viewModel::connectCameraWifi,
+                onConnectCameraWifi = {
+                    if (state.rememberedCamera == null) {
+                        launchCameraQrScanner()
+                    } else {
+                        viewModel.connectCameraWifi()
+                    }
+                },
+                onScanCameraQr = ::launchCameraQrScanner,
                 onSubmitCameraCredentials = viewModel::submitCameraCredentials,
                 onDismissCameraCredentials = viewModel::dismissCameraCredentials,
                 onConnectCurrentWifi = viewModel::connectCurrentWifi,
@@ -91,6 +105,18 @@ class ComposeMainActivity : ComponentActivity() {
             }
             window.decorView.systemUiVisibility = flags
         }
+    }
+
+    private fun launchCameraQrScanner() {
+        val options = ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            setCaptureActivity(SonyQrCaptureActivity::class.java)
+            setPrompt("扫描索尼相机屏幕上的 Wi-Fi 二维码")
+            setBeepEnabled(false)
+            setBarcodeImageEnabled(false)
+            setOrientationLocked(true)
+        }
+        qrScanner.launch(options)
     }
 
     private fun requestNeededPermissions() {
