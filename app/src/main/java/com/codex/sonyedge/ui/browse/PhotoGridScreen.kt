@@ -147,7 +147,12 @@ private fun GridTopBar(title: String, state: SonyEdgeUiState, actions: SonyEdgeA
         )
         Spacer(Modifier.width(10.dp))
         if (state.photos.isNotEmpty()) {
-            MonoText("${state.photos.size} 张", color = colors.text3, fontSize = 12.5.sp)
+            val streaming = state.loading && state.browseTotalCount > state.photos.size
+            MonoText(
+                if (streaming) "${state.photos.size}/${state.browseTotalCount} 张" else "${state.photos.size} 张",
+                color = colors.text3,
+                fontSize = 12.5.sp
+            )
         }
         Spacer(Modifier.weight(1f))
         if (state.photos.isNotEmpty()) {

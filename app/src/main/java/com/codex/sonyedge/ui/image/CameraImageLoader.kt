@@ -9,8 +9,13 @@ import android.util.LruCache
 import androidx.exifinterface.media.ExifInterface
 import com.codex.sonyedge.CameraContentItem
 import com.codex.sonyedge.CameraWifiBinding
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.HttpURLConnection
@@ -32,6 +37,12 @@ object CameraImageLoader {
     private val memoryCache = object : LruCache<String, Bitmap>(128 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+
+    /** 相机 HTTP 服务较弱：网络抓取最多 4 并发，快速滚动时不打爆连接。 */
+    private val fetchSemaphore = Semaphore(4)
+
+    /** 同一 key 的抓取去重：后来者等待首个请求的结果，不重复下载。 */
+    private val inFlightFetches = ConcurrentHashMap<String, CompletableDeferred<Bitmap?>>()
 
     fun cachedBitmap(url: String?, maxDimension: Int, trimLetterbox: Boolean = false): Bitmap? =
         memoryCache.get(memoryKey(url.orEmpty(), maxDimension, trimLetterbox))
@@ -62,41 +73,67 @@ object CameraImageLoader {
                     return@withContext bitmap
                 }
             }
-            var wifiLease: CameraWifiBinding.Lease? = null
-            var connection: HttpURLConnection? = null
+            // in-flight 去重：同 key 只发一次网络请求，其余等待共享结果
+            inFlightFetches[memoryKey]?.let { return@withContext it.await() }
+            val mine = CompletableDeferred<Bitmap?>()
+            val prev = inFlightFetches.putIfAbsent(memoryKey, mine)
+            if (prev != null) return@withContext prev.await()
             try {
-                wifiLease = CameraWifiBinding.acquire(context)
-                connection = wifiLease.network.openConnection(URL(url)) as HttpURLConnection
-                connection.connectTimeout = 3500
-                connection.readTimeout = 9000
-                connection.setRequestProperty("Accept", "image/*,*/*")
-                val responseCode = connection.responseCode
-                if (responseCode !in 200..299) {
-                    Log.w("SonyEdge-Preview", "HTTP $responseCode from ${url.substringBefore('?')}")
-                    return@withContext null
+                val bitmap = fetchSemaphore.withPermit {
+                    fetchAndDecode(context, url, maxDimension, trimLetterbox, diskFile)
                 }
-                val bytes = connection.inputStream.use { it.readBytes() }
-                Log.d("SonyEdge-Preview", "Loaded ${bytes.size} bytes from ${url.substringBefore('?')}")
-                if (bytes.isNotEmpty()) {
-                    runCatching {
-                        diskFile.parentFile?.mkdirs()
-                        diskFile.writeBytes(bytes)
-                    }
-                }
-                val bitmap = decodeSampledBitmap(bytes, maxDimension, trimLetterbox)
                 if (bitmap != null) memoryCache.put(memoryKey, bitmap)
+                mine.complete(bitmap)
                 bitmap
-            } catch (exception: Exception) {
-                Log.w(
-                    "SonyEdge-Preview",
-                    "Failed to load ${url.substringBefore('?')}: ${exception.javaClass.simpleName}: ${exception.message}"
-                )
-                null
+            } catch (cancellation: CancellationException) {
+                mine.complete(null)
+                throw cancellation
             } finally {
-                connection?.disconnect()
-                wifiLease?.close()
+                mine.complete(null)
+                inFlightFetches.remove(memoryKey, mine)
             }
         }
+
+    private fun fetchAndDecode(
+        context: Context,
+        url: String,
+        maxDimension: Int,
+        trimLetterbox: Boolean,
+        diskFile: File
+    ): Bitmap? {
+        var wifiLease: CameraWifiBinding.Lease? = null
+        var connection: HttpURLConnection? = null
+        try {
+            wifiLease = CameraWifiBinding.acquire(context)
+            connection = wifiLease.network.openConnection(URL(url)) as HttpURLConnection
+            connection.connectTimeout = 3500
+            connection.readTimeout = 9000
+            connection.setRequestProperty("Accept", "image/*,*/*")
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                Log.w("SonyEdge-Preview", "HTTP $responseCode from ${url.substringBefore('?')}")
+                return null
+            }
+            val bytes = connection.inputStream.use { it.readBytes() }
+            Log.d("SonyEdge-Preview", "Loaded ${bytes.size} bytes from ${url.substringBefore('?')}")
+            if (bytes.isNotEmpty()) {
+                runCatching {
+                    diskFile.parentFile?.mkdirs()
+                    diskFile.writeBytes(bytes)
+                }
+            }
+            return decodeSampledBitmap(bytes, maxDimension, trimLetterbox)
+        } catch (exception: Exception) {
+            Log.w(
+                "SonyEdge-Preview",
+                "Failed to load ${url.substringBefore('?')}: ${exception.javaClass.simpleName}: ${exception.message}"
+            )
+            return null
+        } finally {
+            connection?.disconnect()
+            wifiLease?.close()
+        }
+    }
 
     fun cleanupExpiredCache(context: Context, force: Boolean = false) {
         val now = System.currentTimeMillis()

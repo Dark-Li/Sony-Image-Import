@@ -141,7 +141,9 @@ data class SonyEdgeUiState(
     /** 连接失败发生在第几步（0=Wi-Fi 1=验证 2=准备） */
     val connectFailedStep: Int = 1,
     /** 日期目录 id → 前 3 张内容（时间线胶片条，仅来自已缓存目录） */
-    val folderPreviews: Map<String, List<CameraContentItem>> = emptyMap()
+    val folderPreviews: Map<String, List<CameraContentItem>> = emptyMap(),
+    /** 流式浏览中目录的总条数（0 = 未在流式加载），网格顶栏显示 n/total */
+    val browseTotalCount: Int = 0
 ) {
     /** 是否位于某个日期目录内（照片网格层） */
     val insideDateFolder: Boolean
@@ -698,7 +700,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                     status = "Preparing camera library..."
                 )
             }
-            val root = runCatching { repository.browse(session, "0") { addLog(it) } }
+            val root = runCatching { repository.browse(session, "0", { addLog(it) }) }
                 .getOrElse { error ->
                     if (requestId == connectionRequestId) {
                         failCameraConnection("Preparing camera library failed: ${error.message}")
@@ -1020,12 +1022,32 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 folders = emptyList(),
                 photos = emptyList(),
                 selectedKeys = emptySet(),
-                previewIndex = null
+                previewIndex = null,
+                browseTotalCount = 0
             )
         }
         scope.launch {
             runCatching {
-                repository.browse(session, id) { addLog(it) }
+                // 流式渲染：每页 32 条到达即追加（仅照片页；目录页整包等待，
+                // 避免自动下钻 0→PhotoRoot→Date 过程中闪现中间层）。
+                // 浏览请求过期时抛异常中止剩余翻页，释放相机带宽。
+                repository.browse(session, id, { addLog(it) }) { pageResult, loaded, total ->
+                    if (requestId != browseRequestId) {
+                        throw kotlinx.coroutines.CancellationException("Browse superseded")
+                    }
+                    if (pageResult.items.isNotEmpty()) {
+                        _uiState.update { state ->
+                            if (requestId != browseRequestId) {
+                                state
+                            } else {
+                                state.copy(
+                                    photos = state.photos + pageResult.items,
+                                    browseTotalCount = total.coerceAtLeast(loaded)
+                                )
+                            }
+                        }
+                    }
+                }
             }.onSuccess { result ->
                 if (requestId != browseRequestId) return@launch
                 val cached = CachedFolder(id, cleanTitle, result.containers, result.items)
@@ -1048,7 +1070,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                         errorMessage = null,
                         loading = false,
                         folders = result.containers,
-                        photos = result.items
+                        photos = result.items,
+                        browseTotalCount = 0
                     )
                 }
                 if (cleanTitle.equals("Date", ignoreCase = true) && result.containers.isNotEmpty()) {
@@ -1062,7 +1085,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                     status = "Open folder failed: ${ex.message}",
                     errorMessage = "Open folder failed: ${ex.message}",
                     selectedKeys = emptySet(),
-                    previewIndex = null
+                    previewIndex = null,
+                    browseTotalCount = 0
                 )
                 addLog("Open folder failed: ${ex.message}")
             }
@@ -1109,7 +1133,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 folders = cached.folders,
                 photos = cached.photos,
                 selectedKeys = emptySet(),
-                previewIndex = null
+                previewIndex = null,
+                browseTotalCount = 0
             )
         }
         if (cached.title.equals("Date", ignoreCase = true) && cached.folders.isNotEmpty()) {
@@ -1605,13 +1630,27 @@ class SonyCameraRepository(private val context: Context) {
         const val DEFAULT_CAMERA_PORT = 64321
     }
 
-    suspend fun browse(session: SonyCameraSession, folderId: String, log: (String) -> Unit): DmsBrowseResult =
+    /**
+     * [onPage] 每拉完一页（32 条）回调一次（IO 线程），用于流式渲染；
+     * 回调内抛出异常可中止后续翻页（浏览请求已过期时使用）。
+     */
+    suspend fun browse(
+        session: SonyCameraSession,
+        folderId: String,
+        log: (String) -> Unit,
+        onPage: ((DmsBrowseResult, Int, Int) -> Unit)? = null
+    ): DmsBrowseResult =
         withContext(Dispatchers.IO) {
             withWifiNetwork(context, log) {
                 val builder = StringBuilder()
                 val dms = session.dmsService
                 val result = if (dms != null) {
-                    DmsContentClient(dms, builder).browseDirectChildren(folderId)
+                    val pageListener = onPage?.let { callback ->
+                        DmsContentClient.PageListener { pageResult, loaded, total ->
+                            callback(pageResult, loaded, total)
+                        }
+                    }
+                    DmsContentClient(dms, builder).browseDirectChildren(folderId, pageListener)
                 } else {
                     if (folderId != "0") {
                         throw IllegalArgumentException("Scalar fallback exposes a flat camera library only")
