@@ -159,7 +159,13 @@ private fun ActiveTransferCard(
 ) {
     val colors = SonyEdgeTheme.colors
     val total = state.downloadTotal.coerceAtLeast(1)
-    val fraction = (state.downloadProgress.toFloat() / total).coerceIn(0f, 1f)
+    // 实时进度：已完成张数 + 当前文件的字节进度（服务端每 500ms 广播一次）
+    val currentFileFraction = if (state.downloadBytesTotal > 0) {
+        (state.downloadBytesDone.toFloat() / state.downloadBytesTotal).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val fraction = ((state.downloadProgress + currentFileFraction) / total).coerceIn(0f, 1f)
     val percent = (fraction * 100).toInt()
     val statusText = if (interrupted) "已中断" else "正在导入"
     val statusColor = if (interrupted) colors.amber else colors.accent

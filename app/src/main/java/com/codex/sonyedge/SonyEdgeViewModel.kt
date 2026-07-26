@@ -192,6 +192,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     private val folderCache = linkedMapOf<String, CachedFolder>()
     private var browseRequestId = 0
     private var connectionRequestId = 0
+    private var previewPrefetchId = 0
     private var pendingCameraSsid: String? = null
     private var pendingCameraPassword: String? = null
     private var pendingCameraIdentity: String? = null
@@ -841,6 +842,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             pendingGuard?.let { abortXPushGuard(it, "Camera connection reset") }
         }
         browseRequestId++
+        previewPrefetchId++
         folderCache.clear()
         _uiState.update {
             it.copy(
@@ -1049,6 +1051,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                         photos = result.items
                     )
                 }
+                if (cleanTitle.equals("Date", ignoreCase = true) && result.containers.isNotEmpty()) {
+                    prefetchDatePreviews(result.containers)
+                }
             }.onFailure { ex ->
                 if (requestId != browseRequestId) return@launch
                 _uiState.value = previousState.copy(
@@ -1060,6 +1065,31 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                     previewIndex = null
                 )
                 addLog("Open folder failed: ${ex.message}")
+            }
+        }
+    }
+
+    /**
+     * 日期时间线胶片条预取：对每个非空日期目录发一次「前 3 条」的 Browse 请求，
+     * 串行低优先级执行；断开 / 会话变更 / 新一轮预取时自动失效。
+     * 结果只写入 folderPreviews（不进 folderCache，避免污染完整浏览缓存）。
+     */
+    private fun prefetchDatePreviews(folders: List<DmsContainerItem>) {
+        val session = activeSession ?: return
+        if (folders.isEmpty()) return
+        val prefetchId = ++previewPrefetchId
+        scope.launch {
+            for (folder in folders) {
+                if (prefetchId != previewPrefetchId || activeSession !== session) return@launch
+                if (folder.childCount == 0) continue
+                if (_uiState.value.folderPreviews.containsKey(folder.id)) continue
+                val items = runCatching {
+                    repository.browseFolderPreview(session, folder.id, 3) { }
+                }.getOrNull() ?: continue
+                if (prefetchId != previewPrefetchId || activeSession !== session) return@launch
+                _uiState.update {
+                    it.copy(folderPreviews = it.folderPreviews + (folder.id to items.take(3)))
+                }
             }
         }
     }
@@ -1081,6 +1111,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 selectedKeys = emptySet(),
                 previewIndex = null
             )
+        }
+        if (cached.title.equals("Date", ignoreCase = true) && cached.folders.isNotEmpty()) {
+            prefetchDatePreviews(cached.folders)
         }
     }
 
@@ -1596,6 +1629,21 @@ class SonyCameraRepository(private val context: Context) {
                 result
             }
         }
+
+    /** 单次 Browse 请求取目录前 [count] 条，供日期时间线胶片条预取。 */
+    suspend fun browseFolderPreview(
+        session: SonyCameraSession,
+        folderId: String,
+        count: Int,
+        log: (String) -> Unit
+    ): List<CameraContentItem> = withContext(Dispatchers.IO) {
+        val dms = session.dmsService ?: return@withContext emptyList()
+        withWifiNetwork(context, log) {
+            val builder = StringBuilder()
+            val result = DmsContentClient(dms, builder).browseFirstItems(folderId, count)
+            result.items
+        }
+    }
 
     suspend fun startCameraSelection(
         session: SonyCameraSession,

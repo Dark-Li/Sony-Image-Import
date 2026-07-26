@@ -137,18 +137,24 @@ private fun ConnectedStatusBar(
                 .background(colors.teal, CircleShape)
         )
         Spacer(Modifier.width(10.dp))
-        Text(
-            model,
-            color = colors.text1,
-            fontFamily = DisplayFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            maxLines = 1,
-            modifier = Modifier.weight(1f, fill = false)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text("已连接", color = colors.text3, fontSize = 12.5.sp)
-        Spacer(Modifier.weight(1f))
+        Row(
+            Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                model,
+                color = colors.text1,
+                fontFamily = DisplayFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("已连接", color = colors.text3, fontSize = 12.5.sp, maxLines = 1)
+        }
+        Spacer(Modifier.width(4.dp))
         IconButton(onClick = onRefresh, enabled = !state.loading, modifier = Modifier.size(Dimens.touchTarget)) {
             Icon(Icons.Default.Refresh, contentDescription = "刷新", tint = colors.text1, modifier = Modifier.size(22.dp))
         }

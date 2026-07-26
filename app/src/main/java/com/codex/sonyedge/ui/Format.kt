@@ -21,7 +21,9 @@ private val WEEKDAYS = arrayOf("周日", "周一", "周二", "周三", "周四",
 fun parseDateFolderLabel(title: String, dateHint: String?): DateFolderLabel {
     val candidates = listOfNotNull(dateHint?.takeIf { it.isNotBlank() }, title)
     for (candidate in candidates) {
-        val full = Regex("(\\d{4})[-/.]?(\\d{2})[-/.]?(\\d{2})").find(candidate)
+        // 兼容 "2026-07-24" / "2026-7-2" / "20260724"
+        val full = Regex("(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})").find(candidate)
+            ?: Regex("(\\d{4})(\\d{2})(\\d{2})").find(candidate)
         if (full != null) {
             val (y, m, d) = full.destructured
             val year = y.toIntOrNull()
