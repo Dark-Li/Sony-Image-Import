@@ -1070,7 +1070,7 @@ public class DownloadService extends Service {
         return builder
                 .setContentTitle("SonyEdge")
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setSmallIcon(R.drawable.ic_stat_sonyedge)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .build();
