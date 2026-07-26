@@ -42,14 +42,20 @@ fun RemoteCameraImage(
     url: String?,
     modifier: Modifier,
     contentScale: ContentScale,
-    maxDimension: Int
+    maxDimension: Int,
+    trimLetterbox: Boolean = false
 ) {
     val context = LocalContext.current
     val bitmap by produceState(
-        initialValue = CameraImageLoader.cachedBitmap(url, maxDimension),
-        url, maxDimension
+        initialValue = CameraImageLoader.cachedBitmap(url, maxDimension, trimLetterbox),
+        url, maxDimension, trimLetterbox
     ) {
-        value = CameraImageLoader.loadBitmap(context.applicationContext, url.orEmpty(), maxDimension)
+        value = CameraImageLoader.loadBitmap(
+            context.applicationContext,
+            url.orEmpty(),
+            maxDimension,
+            trimLetterbox
+        )
     }
     val renderedBitmap = bitmap
     if (renderedBitmap == null) {

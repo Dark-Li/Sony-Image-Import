@@ -33,18 +33,30 @@ object CameraImageLoader {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
-    fun cachedBitmap(url: String?, maxDimension: Int): Bitmap? =
-        memoryCache.get("${url.orEmpty()}@$maxDimension")
+    fun cachedBitmap(url: String?, maxDimension: Int, trimLetterbox: Boolean = false): Bitmap? =
+        memoryCache.get(memoryKey(url.orEmpty(), maxDimension, trimLetterbox))
 
-    suspend fun loadBitmap(context: Context, url: String, maxDimension: Int): Bitmap? =
+    private fun memoryKey(url: String, maxDimension: Int, trimLetterbox: Boolean): String =
+        if (trimLetterbox) "$url@$maxDimension@trim" else "$url@$maxDimension"
+
+    /**
+     * [trimLetterbox]：解码后裁掉图片自带的纯黑 letterbox 边（相机缩略图常见），
+     * 供网格/胶片条 Crop 铺满使用；磁盘缓存仍存原始字节，两种形态共享。
+     */
+    suspend fun loadBitmap(
+        context: Context,
+        url: String,
+        maxDimension: Int,
+        trimLetterbox: Boolean = false
+    ): Bitmap? =
         withContext(Dispatchers.IO) {
             if (url.isBlank()) return@withContext null
             cleanupExpiredCache(context)
-            val memoryKey = "$url@$maxDimension"
+            val memoryKey = memoryKey(url, maxDimension, trimLetterbox)
             memoryCache.get(memoryKey)?.let { return@withContext it }
             val diskFile = cacheFile(context, url)
             if (diskFile.isFile && diskFile.length() > 0) {
-                decodeSampledBitmap(diskFile.readBytes(), maxDimension)?.let { bitmap ->
+                decodeSampledBitmap(diskFile.readBytes(), maxDimension, trimLetterbox)?.let { bitmap ->
                     runCatching { diskFile.setLastModified(System.currentTimeMillis()) }
                     memoryCache.put(memoryKey, bitmap)
                     return@withContext bitmap
@@ -71,7 +83,7 @@ object CameraImageLoader {
                         diskFile.writeBytes(bytes)
                     }
                 }
-                val bitmap = decodeSampledBitmap(bytes, maxDimension)
+                val bitmap = decodeSampledBitmap(bytes, maxDimension, trimLetterbox)
                 if (bitmap != null) memoryCache.put(memoryKey, bitmap)
                 bitmap
             } catch (exception: Exception) {
@@ -134,7 +146,11 @@ object CameraImageLoader {
         return File(File(context.cacheDir, "sonyedge-image-cache"), "$name.img")
     }
 
-    private fun decodeSampledBitmap(bytes: ByteArray, maxDimension: Int): Bitmap? {
+    private fun decodeSampledBitmap(
+        bytes: ByteArray,
+        maxDimension: Int,
+        trimLetterbox: Boolean = false
+    ): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -147,7 +163,72 @@ object CameraImageLoader {
             inPreferredConfig = Bitmap.Config.RGB_565
         }
         val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
-        return applyExifOrientation(bytes, decoded)
+        val oriented = applyExifOrientation(bytes, decoded)
+        return if (trimLetterbox) trimLetterboxBars(oriented) else oriented
+    }
+
+    /**
+     * 裁掉四周近乎纯黑的 letterbox 边。仅当整行/整列几乎全黑（亮度 ≤20，允许 1 个采样点例外）
+     * 才视为黑边；每侧最多裁 1/3，避免误裁夜景等真实暗部内容。
+     */
+    private fun trimLetterboxBars(source: Bitmap): Bitmap {
+        val width = source.width
+        val height = source.height
+        if (width < 16 || height < 16) return source
+
+        fun isDark(pixel: Int): Boolean {
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            return r <= 20 && g <= 20 && b <= 20
+        }
+
+        fun rowIsBlack(y: Int): Boolean {
+            val step = (width / 24).coerceAtLeast(1)
+            var dark = 0
+            var count = 0
+            var x = 0
+            while (x < width) {
+                if (isDark(source.getPixel(x, y))) dark++
+                count++
+                x += step
+            }
+            return dark >= count - 1
+        }
+
+        fun colIsBlack(x: Int): Boolean {
+            val step = (height / 24).coerceAtLeast(1)
+            var dark = 0
+            var count = 0
+            var y = 0
+            while (y < height) {
+                if (isDark(source.getPixel(x, y))) dark++
+                count++
+                y += step
+            }
+            return dark >= count - 1
+        }
+
+        val maxTrimY = height / 3
+        val maxTrimX = width / 3
+        var top = 0
+        while (top < maxTrimY && rowIsBlack(top)) top++
+        var bottom = height - 1
+        while (height - 1 - bottom < maxTrimY && bottom > top && rowIsBlack(bottom)) bottom--
+        var left = 0
+        while (left < maxTrimX && colIsBlack(left)) left++
+        var right = width - 1
+        while (width - 1 - right < maxTrimX && right > left && colIsBlack(right)) right--
+
+        if (top == 0 && bottom == height - 1 && left == 0 && right == width - 1) return source
+        val newWidth = right - left + 1
+        val newHeight = bottom - top + 1
+        if (newWidth < width / 2 && newHeight < height / 2) return source
+        return runCatching {
+            Bitmap.createBitmap(source, left, top, newWidth, newHeight).also { trimmed ->
+                if (trimmed != source) source.recycle()
+            }
+        }.getOrElse { source }
     }
 
     private fun applyExifOrientation(bytes: ByteArray, bitmap: Bitmap): Bitmap {

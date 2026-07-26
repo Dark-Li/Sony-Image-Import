@@ -297,7 +297,8 @@ private fun Filmstrip(previews: List<com.codex.sonyedge.CameraContentItem>) {
                         url = item.previewUrl(),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
-                        maxDimension = 200
+                        maxDimension = 200,
+                        trimLetterbox = true
                     )
                 }
             }

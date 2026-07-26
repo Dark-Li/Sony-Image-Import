@@ -332,7 +332,8 @@ private fun PhotoTile(
                     url = item.previewUrl(),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    maxDimension = 420
+                    maxDimension = 420,
+                    trimLetterbox = true
                 )
             }
         }
