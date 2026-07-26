@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.codex.sonyedge.CameraConnectPhase
-import com.codex.sonyedge.DownloadService
 import com.codex.sonyedge.SonyEdgeTab
 import com.codex.sonyedge.SonyEdgeUiState
 import com.codex.sonyedge.TransferOutcome
