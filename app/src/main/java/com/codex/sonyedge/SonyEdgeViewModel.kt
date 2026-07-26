@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.codex.sonyedge.ui.formatDateFolderTitle
+import com.codex.sonyedge.ui.image.CameraImageLoader
+import com.codex.sonyedge.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.InetSocketAddress
@@ -62,6 +65,20 @@ data class ConnectedCameraInfo(
 
 data class FolderState(val id: String, val title: String)
 
+/** 传输任务的终态类型（传输页历史卡）。 */
+enum class TransferOutcome { Done, PartialFail, Interrupted }
+
+/** 一条已结束的传输任务记录（仅会话内存，UI 展示用）。 */
+data class TransferRecord(
+    val id: Long,
+    val title: String,
+    val total: Int,
+    val success: Int,
+    val failed: Int,
+    val bytes: Long,
+    val outcome: TransferOutcome
+)
+
 private data class CachedFolder(
     val id: String,
     val title: String,
@@ -106,26 +123,63 @@ data class SonyEdgeUiState(
     val failedItems: List<CameraContentItem> = emptyList(),
     val cameraSelectionStatus: String = "Camera-selected photos are detected automatically after connection.",
     val cameraSelectionReceiving: Boolean = false,
-    val cameraSelectionCleanupInProgress: Boolean = false
+    val cameraSelectionCleanupInProgress: Boolean = false,
+    // —— UI 层扩展状态 ——
+    val themeMode: ThemeMode = ThemeMode.System,
+    val receiveCameraSelectionEnabled: Boolean = true,
+    val gridHintDismissed: Boolean = false,
+    /** 多选模式（可为 0 张选中） */
+    val selectionMode: Boolean = false,
+    /** 当前批次标题（如「7月24日」/「相机选择」） */
+    val downloadBatchTitle: String = "",
+    /** 当前正在下载的文件名 */
+    val downloadCurrentFile: String = "",
+    /** 已结束批次的历史记录（最新在前） */
+    val transferHistory: List<TransferRecord> = emptyList(),
+    /** 一次性 Snackbar 消息 */
+    val transientMessage: String? = null,
+    /** 连接失败发生在第几步（0=Wi-Fi 1=验证 2=准备） */
+    val connectFailedStep: Int = 1,
+    /** 日期目录 id → 前 3 张内容（时间线胶片条，仅来自已缓存目录） */
+    val folderPreviews: Map<String, List<CameraContentItem>> = emptyMap()
 ) {
+    /** 是否位于某个日期目录内（照片网格层） */
+    val insideDateFolder: Boolean
+        get() = folderStack.lastOrNull()?.title?.equals("Date", ignoreCase = true) == true ||
+            photos.isNotEmpty()
+
+    val isConnectingPhase: Boolean
+        get() = connectPhase in setOf(
+            CameraConnectPhase.RequestingWifi,
+            CameraConnectPhase.VerifyingCamera,
+            CameraConnectPhase.PreparingLibrary,
+            CameraConnectPhase.Failed
+        )
+
     val shouldHandleBack: Boolean
         get() = previewIndex != null ||
+            selectionMode ||
             selectedKeys.isNotEmpty() ||
-            isConnectedCameraBrowsing(this) ||
-            folderStack.isNotEmpty() ||
-            activeTab != browseTabFor(this)
+            (insideDateFolder && folderStack.isNotEmpty()) ||
+            isConnectingPhase ||
+            activeTab == SonyEdgeTab.Transfers ||
+            activeTab == SonyEdgeTab.Settings
 }
 
 class SonyEdgeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SonyCameraRepository(application)
     private val wifiProfileStore = CameraWifiProfileStore(application)
     private val wifiConnector = CameraWifiConnector(application)
+    private val uiPrefs = UiPrefsStore(application)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _uiState = MutableStateFlow(
         SonyEdgeUiState(
             rememberedCamera = wifiProfileStore.load()?.let {
                 RememberedCamera(ssid = it.ssid, modelName = it.cameraModel)
-            }
+            },
+            themeMode = uiPrefs.themeMode,
+            receiveCameraSelectionEnabled = uiPrefs.receiveCameraSelection,
+            gridHintDismissed = uiPrefs.gridHintDismissed
         )
     )
     val uiState: StateFlow<SonyEdgeUiState> = _uiState
@@ -171,15 +225,56 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         backFromCameraContent()
     }
 
+    /**
+     * 系统返回优先级：关预览 → 退多选清空选择 → 网格回时间线 →
+     * 连接中取消 → 传输/设置回浏览 →（未处理时退出应用）。
+     */
     fun backFromCameraContent() {
         val state = _uiState.value
         when {
             state.previewIndex != null -> closePreview()
-            state.selectedKeys.isNotEmpty() -> clearSelection()
-            isConnectedCameraBrowsing(state) -> restoreDateDirectoryOrConnectionHome(state)
-            state.activeTab != browseTabFor(state) -> selectTab(SonyEdgeTab.Library)
-            state.folderStack.isNotEmpty() -> restorePreviousFolder(state)
+            state.selectionMode || state.selectedKeys.isNotEmpty() -> exitSelectionMode()
+            state.insideDateFolder && state.folderStack.isNotEmpty() -> restorePreviousFolder(state)
+            state.isConnectingPhase -> cancelCameraConnection()
+            state.activeTab == SonyEdgeTab.Transfers ||
+                state.activeTab == SonyEdgeTab.Settings -> selectTab(SonyEdgeTab.Library)
         }
+    }
+
+    // —— UI 偏好 ——
+
+    fun setThemeMode(mode: ThemeMode) {
+        uiPrefs.themeMode = mode
+        _uiState.update { it.copy(themeMode = mode) }
+    }
+
+    fun setReceiveCameraSelection(enabled: Boolean) {
+        uiPrefs.receiveCameraSelection = enabled
+        _uiState.update { it.copy(receiveCameraSelectionEnabled = enabled) }
+    }
+
+    fun dismissGridHint() {
+        uiPrefs.gridHintDismissed = true
+        _uiState.update { it.copy(gridHintDismissed = true) }
+    }
+
+    fun enterSelectionMode() {
+        _uiState.update { it.copy(selectionMode = true) }
+    }
+
+    fun exitSelectionMode() {
+        _uiState.update { it.copy(selectionMode = false, selectedKeys = emptySet()) }
+    }
+
+    fun clearThumbnailCache() {
+        scope.launch {
+            CameraImageLoader.clearAllCaches(getApplication())
+            _uiState.update { it.copy(transientMessage = "缩略图缓存已清除") }
+        }
+    }
+
+    fun consumeTransientMessage() {
+        _uiState.update { it.copy(transientMessage = null) }
     }
 
     fun connectCameraWifi() {
@@ -379,42 +474,13 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
     }
 
-    fun returnToConnectionHome() {
-        val session = activeSession ?: return
-        browseRequestId++
-        val modelName = _uiState.value.connectedCamera?.modelName
-            ?: resolveCameraModel(
-                modelNumber = session.device.modelNumber,
-                modelName = session.device.modelName,
-                friendlyName = session.device.friendlyName,
-                ssid = pendingCameraSsid.orEmpty()
-            )
-        _uiState.update {
-            it.copy(
-                activeTab = SonyEdgeTab.Library,
-                connectionState = ConnectionState.Connected,
-                connectPhase = CameraConnectPhase.Connected,
-                credentialsDialogVisible = false,
-                credentialsSsidPrefill = "",
-                connectionHomeVisible = true,
-                status = "Connected to $modelName.",
-                errorMessage = null,
-                loading = false,
-                currentFolderId = "0",
-                currentFolderTitle = "Camera",
-                folderStack = emptyList(),
-                folders = emptyList(),
-                photos = emptyList(),
-                selectedKeys = emptySet(),
-                previewIndex = null
-            )
-        }
-    }
-
     fun disconnectCamera() {
         if (isCameraTransferBusy(_uiState.value)) {
             _uiState.update {
-                it.copy(status = "Cancel or finish the active camera transfer before disconnecting.")
+                it.copy(
+                    status = "Cancel or finish the active camera transfer before disconnecting.",
+                    transientMessage = "请先取消或完成正在进行的传输"
+                )
             }
             return
         }
@@ -688,8 +754,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             friendlyName = friendlyName,
             host = cameraHost(session)
         )
-        val shouldAutoBrowse = autoBrowseAfterConnection
-        val shouldAutoReceiveSelection = supportsCameraSelection(session)
+        val shouldAutoReceiveSelection =
+            supportsCameraSelection(session) && _uiState.value.receiveCameraSelectionEnabled
         autoBrowseAfterConnection = false
         _uiState.update {
             it.copy(
@@ -703,7 +769,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 credentialsDialogVisible = false,
                 credentialsSsidPrefill = "",
                 manualCredentialsAvailable = false,
-                connectionHomeVisible = shouldAutoReceiveSelection || !shouldAutoBrowse,
+                connectionHomeVisible = false,
                 status = "Connected to $modelName.",
                 errorMessage = null,
                 loading = false,
@@ -713,6 +779,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 folders = emptyList(),
                 photos = emptyList(),
                 selectedKeys = emptySet(),
+                selectionMode = false,
                 previewIndex = null,
                 cameraSelectionReceiving = false
             )
@@ -720,12 +787,19 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         if (shouldAutoReceiveSelection) {
             addLog("XPushList advertised; receiving camera-selected photos automatically")
             receiveCameraSelection(autoTriggered = true)
-        } else if (shouldAutoBrowse) {
+        } else {
+            // 连接成功后直接落到日期时间线（autoNextDateFolder 停在 Date 层）
             openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
         }
     }
 
     private fun failCameraConnection(message: String, releaseRequestedNetwork: Boolean = true) {
+        val failedStep = when (_uiState.value.connectPhase) {
+            CameraConnectPhase.RequestingWifi -> 0
+            CameraConnectPhase.VerifyingCamera -> 1
+            CameraConnectPhase.PreparingLibrary -> 2
+            else -> 1
+        }
         val exposeManualFallback = pendingConnectionFromQr
         connectionRequestId++
         pendingCameraSsid = null
@@ -751,7 +825,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 connectionHomeVisible = false,
                 status = message,
                 errorMessage = message,
-                loading = false
+                loading = false,
+                connectFailedStep = failedStep
             )
         }
     }
@@ -775,8 +850,10 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 folders = emptyList(),
                 photos = emptyList(),
                 selectedKeys = emptySet(),
+                selectionMode = false,
                 previewIndex = null,
-                cameraSelectionReceiving = false
+                cameraSelectionReceiving = false,
+                folderPreviews = emptyMap()
             )
         }
         return pendingGuard
@@ -812,6 +889,11 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                     "Finishing the previous camera transfer session..."
                 } else {
                     "Cancel or finish the active camera transfer first."
+                },
+                transientMessage = if (state.cameraSelectionCleanupInProgress) {
+                    "正在结束上一个传输会话…"
+                } else {
+                    "请先取消或完成正在进行的传输"
                 }
             )
         }
@@ -858,15 +940,6 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
 
     fun goBack() {
         backFromCameraContent()
-    }
-
-    private fun restoreDateDirectoryOrConnectionHome(state: SonyEdgeUiState) {
-        val parent = state.folderStack.lastOrNull()
-        if (parent?.title.equals("Date", ignoreCase = true)) {
-            restorePreviousFolder(state)
-        } else {
-            returnToConnectionHome()
-        }
     }
 
     private fun restorePreviousFolder(state: SonyEdgeUiState) {
@@ -955,6 +1028,9 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 if (requestId != browseRequestId) return@launch
                 val cached = CachedFolder(id, cleanTitle, result.containers, result.items)
                 folderCache[id] = cached
+                _uiState.update {
+                    it.copy(folderPreviews = it.folderPreviews + (id to result.items.take(3)))
+                }
                 val autoTarget = autoNextDateFolder(cleanTitle, id, result.containers, result.items, autoOpenDateDirectory)
                 if (autoTarget != null) {
                     addLog("Auto-opening ${cleanTitle(autoTarget.title, autoTarget.id)}")
@@ -1114,7 +1190,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 activeTab = if (autoTriggered) SonyEdgeTab.Library else SonyEdgeTab.Settings,
                 connectionState = ConnectionState.Connected,
-                connectionHomeVisible = autoTriggered || it.connectionHomeVisible,
+                connectionHomeVisible = false,
                 status = "Waiting for the camera-selected photos...",
                 errorMessage = null,
                 loading = true,
@@ -1176,7 +1252,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                             activeTab = SonyEdgeTab.Library,
                             connectionState = ConnectionState.Connected,
                             connectPhase = CameraConnectPhase.Connected,
-                            connectionHomeVisible = true,
+                            connectionHomeVisible = false,
                             status = "Connected to the camera.",
                             errorMessage = null,
                             loading = false,
@@ -1184,6 +1260,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                             cameraSelectionReceiving = false
                         )
                     }
+                    // 接收失败后尝试常规浏览，落到日期时间线
+                    openFolder("0", "Camera", pushCurrent = false, autoOpenDateDirectory = true)
                 } else {
                     _uiState.update {
                         it.copy(
@@ -1245,10 +1323,18 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             setError("Unable to start import: ${ex.message}", SonyEdgeTab.Transfers)
             return
         }
+        val batchTitle = if (usesCameraSelection) {
+            "相机选择"
+        } else {
+            formatDateFolderTitle(_uiState.value.currentFolderTitle)
+        }
         _uiState.update {
             it.copy(
                 activeTab = SonyEdgeTab.Transfers,
                 selectedKeys = emptySet(),
+                selectionMode = false,
+                downloadBatchTitle = batchTitle,
+                downloadCurrentFile = "",
                 downloadMessage = "Queued ${items.size} imports.",
                 downloadProgress = 0,
                 downloadTotal = items.size.coerceAtLeast(1),
@@ -1284,6 +1370,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val success = intent.getIntExtra(DownloadService.EXTRA_SUCCESS, 0).coerceAtLeast(0)
         val failed = intent.getIntExtra(DownloadService.EXTRA_FAILED, 0).coerceAtLeast(0)
         val failedJson = intent.getStringExtra(DownloadService.EXTRA_ITEM_JSON).orEmpty()
+        val filename = intent.getStringExtra(DownloadService.EXTRA_FILENAME).orEmpty()
         val bytesDone = intent.getLongExtra(DownloadService.EXTRA_BYTES_DONE, 0).coerceAtLeast(0)
         val bytesTotal = intent.getLongExtra(DownloadService.EXTRA_BYTES_TOTAL, 0).coerceAtLeast(0)
         val speedBps = intent.getLongExtra(DownloadService.EXTRA_SPEED_BPS, 0).coerceAtLeast(0)
@@ -1302,7 +1389,31 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             } else {
                 current.failedItems
             }
+            // 批次进入终态时归档到历史（最新在前）
+            val nowTerminal = state in terminalStates
+            val wasTerminal = current.downloadState in terminalStates
+            val history = if (nowTerminal && !wasTerminal && current.downloadTotal > 0) {
+                val outcome = when {
+                    state == DownloadService.STATE_DONE && failed == 0 -> TransferOutcome.Done
+                    state == DownloadService.STATE_DONE -> TransferOutcome.PartialFail
+                    else -> TransferOutcome.Interrupted
+                }
+                val record = TransferRecord(
+                    id = System.currentTimeMillis(),
+                    title = current.downloadBatchTitle.ifBlank { "导入任务" },
+                    total = total,
+                    success = success,
+                    failed = failed,
+                    bytes = maxOf(batchBytesDone, current.downloadBatchBytesDone),
+                    outcome = outcome
+                )
+                (listOf(record) + current.transferHistory).take(20)
+            } else {
+                current.transferHistory
+            }
             current.copy(
+                transferHistory = history,
+                downloadCurrentFile = if (filename.isNotBlank()) filename else current.downloadCurrentFile,
                 activeTab = if (state == DownloadService.STATE_STARTED) SonyEdgeTab.Transfers else current.activeTab,
                 downloadMessage = message.ifBlank { current.downloadMessage },
                 downloadProgress = completed,
@@ -1380,6 +1491,11 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         private val eventStates = setOf(
             DownloadService.STATE_FILE_DONE,
             DownloadService.STATE_FILE_FAILED,
+            DownloadService.STATE_DONE,
+            DownloadService.STATE_FATAL,
+            DownloadService.STATE_CANCELLED
+        )
+        private val terminalStates = setOf(
             DownloadService.STATE_DONE,
             DownloadService.STATE_FATAL,
             DownloadService.STATE_CANCELLED
@@ -1638,12 +1754,6 @@ fun isCameraSelectionTransferTerminal(state: SonyEdgeUiState): Boolean =
         DownloadService.STATE_FATAL,
         DownloadService.STATE_CANCELLED
     )
-
-private fun isConnectedCameraBrowsing(state: SonyEdgeUiState): Boolean =
-    state.connectPhase == CameraConnectPhase.Connected &&
-        state.connectedCamera != null &&
-        !state.connectionHomeVisible &&
-        state.activeTab in setOf(SonyEdgeTab.Library, SonyEdgeTab.Camera)
 
 fun browseTabFor(folders: List<DmsContainerItem>, photos: List<CameraContentItem>): SonyEdgeTab =
     if (photos.isEmpty() && folders.isNotEmpty()) SonyEdgeTab.Camera else SonyEdgeTab.Library
