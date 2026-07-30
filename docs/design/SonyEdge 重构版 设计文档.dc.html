@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=Space+Grotesk:wght@500;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0;background:#E9E8E4;font-family:'Noto Sans SC',Roboto,system-ui,sans-serif;color:#1D1C19}
+a{color:#B26E10}a:hover{color:#8F5A0C}</style>
+</helmet>
+<div style="padding:44px 48px 80px;display:flex;flex-direction:column;gap:56px">
+
+<!-- ═══════════ 封面 ═══════════ -->
+<div style="max-width:960px">
+  <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;background:#E8A33C;border-radius:2px"></div><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;letter-spacing:.1em">SONYEDGE · 重构版设计文档 v1.0</div></div>
+  <div style="font-size:30px;font-weight:700;margin-top:10px">安静的专业摄影导入工具 — 落地规格</div>
+  <div style="font-size:14px;color:#5C5A54;line-height:1.85;margin-top:12px;text-wrap:pretty">基准画布 360×792 dp · Kotlin + Jetpack Compose (Material 3 定制主题) · 浅色默认,深色为夜间模式 · 大图预览恒为沉浸黑。设计主张:照片是屏幕上最亮的内容;一种琥珀强调色只用于主操作与选中;文件名、SSID、计数、速度等"机器信息"一律等宽字体;大号日期数字构成时间线的视觉锚点。所有页面实例均可交互,可直接走完整流程核对行为。</div>
+  <div style="font-size:12.5px;color:#949088;margin-top:8px">功能对照基线:仓库 <span style="font-family:'IBM Plex Mono',monospace">docs/design/figma-ui-redesign/phase-0-discovery.md</span> 的功能保留矩阵;实机基线 ILCE-7RM3。本文档只重构信息架构/视觉/交互,不改协议与下载栈。</div>
+</div>
+
+<!-- ═══════════ 00 设计令牌 ═══════════ -->
+<section style="max-width:1500px">
+  <div style="font-size:19px;font-weight:700;margin-bottom:4px">00 · 设计令牌 (ui/theme)</div>
+  <div style="font-size:13px;color:#5C5A54;margin-bottom:18px">单一令牌源同时驱动 Compose ColorScheme、XML 主题与系统栏颜色。命名建议直接落为 <span style="font-family:'IBM Plex Mono',monospace">SonyEdgeColors</span> 数据类 + <span style="font-family:'IBM Plex Mono',monospace">CompositionLocal</span>。</div>
+  <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+    <div style="background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:20px 22px;min-width:430px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px">色彩(浅色 / 深色)</div>
+      <div style="display:grid;grid-template-columns:110px 130px 130px;gap:6px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;align-items:center">
+        <div style="font-family:'Noto Sans SC';color:#949088">令牌</div><div style="font-family:'Noto Sans SC';color:#949088">Light</div><div style="font-family:'Noto Sans SC';color:#949088">Dark</div>
+        <div>bg</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#FAF9F7;border:1px solid #ddd"></div>#FAF9F7</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#0E0F11"></div>#0E0F11</div>
+        <div>surface</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#FFFFFF;border:1px solid #ddd"></div>#FFFFFF</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#17181B"></div>#17181B</div>
+        <div>surface2</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#EFEDE8"></div>#EFEDE8</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#212327"></div>#212327</div>
+        <div>line</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#E5E2DB"></div>#E5E2DB</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#292B30"></div>#292B30</div>
+        <div>text1</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#1D1C19"></div>#1D1C19</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#F1F1EF;border:1px solid #444"></div>#F1F1EF</div>
+        <div>text2</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#5C5A54"></div>#5C5A54</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#A9ABAF"></div>#A9ABAF</div>
+        <div>text3</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#949088"></div>#949088</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#686B71"></div>#686B71</div>
+        <div>accent(文字)</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#B26E10"></div>#B26E10</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#E8A33C"></div>#E8A33C</div>
+        <div>accentFill</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#E8A33C"></div>#E8A33C</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#E8A33C"></div>#E8A33C</div>
+        <div>onAccentFill</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#FFFFFF;border:1px solid #ddd"></div>#FFFFFF*</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#1C1204"></div>#1C1204</div>
+        <div>teal 成功</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#0E8578"></div>#0E8578</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#53CBBB"></div>#53CBBB</div>
+        <div>rose 错误</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#C2483C"></div>#C2483C</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#E5695C"></div>#E5695C</div>
+        <div>amber 等待</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#96650A"></div>#96650A</div><div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:3px;background:#E8A33C"></div>#E8A33C</div>
+      </div>
+      <div style="font-size:12px;color:#949088;line-height:1.7;margin-top:12px">*浅色实心按钮为 #E8A33C 底 + #1C1204 深字(现行实现),对比度 8.1:1。teal/rose/amber 各配一个 12% 透明度容器色(tealbg/rosebg/amberbg)用于横幅底色。状态栏图标:浅色页面深色图标,深色页面与预览页浅色图标。</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div style="background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:20px 22px;min-width:380px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">字体</div>
+        <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">UI 正文 — Noto Sans SC(Compose 默认中文回退即可)
+数字展示 — Space Grotesk 700:日期大数字 30sp、进度百分比 26sp、机型名 16–27sp
+机器信息 — IBM Plex Mono(或 JetBrains Mono):文件名 11–12.5sp、SSID、计数、速度/ETA/字节、路径、版本号
+层级:页标题 19sp/700 · 栏标题 16.5sp/600 · 列表主文本 14.5sp/500–600 · 辅助 12–12.5sp · 分组眉题 11sp/600 + 0.12em 字距
+最小可读字号 11sp;所有按钮文字单行完整显示(白名单已核对最长“扫描相机二维码”7 字)</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:20px 22px;min-width:380px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">间距 · 圆角 · 高度</div>
+        <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">页面水平边距 20dp(卡片列表 16dp);卡片内边距 14–16dp
+圆角:卡片/按钮 8dp · 输入框/次级按钮 6dp · 悬浮多选条 12dp · 缩略图胶片条 5dp
+高度:主按钮 44–48dp · 次级按钮 38–40dp · 小按钮 34dp · 顶栏 54dp · 底部导航 72dp(含 16dp 手势内边距)
+网格:3 列 · 2dp 间距 · 1:1 · 全出血(0 水平边距);触控目标 ≥44dp
+状态栏占位 30dp;内容滚动区底部预留 94dp(多选时 126dp)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 连接流程 ═══════════ -->
+<section>
+  <div style="font-size:19px;font-weight:700;margin-bottom:4px">01 · 连接流程</div>
+  <div style="font-size:13px;color:#5C5A54;margin-bottom:18px;max-width:920px">连接成功后直接落在「拍摄日期时间线」,不设中转首页(对应 <span style="font-family:'IBM Plex Mono',monospace">autoNextDateFolder</span> 停在 Date 层的既有行为)。手动输入 Wi-Fi 仅在失败后出现;帮助入口是弹窗而非新页面。</div>
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">1A · 未连接 — 设备票据卡</div><dc-import name="SonyEdge 重构版" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">机型 Space Grotesk 24sp;SSID mono 11.5sp。主 CTA「一键连接」仅在有已保存相机时为实心;否则「扫描二维码」升级为主 CTA。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">1B · 正在连接 — 垂直步骤时间线</div><dc-import name="SonyEdge 重构版" initial="连接中" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">三步:连接相机 Wi-Fi → 验证相机 → 准备照片;左侧 2dp 竖轨连接节点。进行中=琥珀旋转环(900ms/圈),完成=teal 对勾,失败=rose error。底部常驻「取消连接」与“通常需要 5–10 秒”预期管理文案。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">1C · 连接失败 → 重试 / 手动 Wi-Fi</div><dc-import name="SonyEdge 重构版" initial="连接失败" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">失败卡说明面向用户(“相机屏幕停留在发送到智能手机”),不出现 IP/SSDP/DMS 术语。点击「手动输入 Wi-Fi」内联展开表单。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">1D · 日期时间线(连接后落点)</div><dc-import name="SonyEdge 重构版" initial="日期时间线" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">顶部状态条:teal 呼吸点 + 机型 + 刷新 + 断开(带确认弹窗)。每行 = 大日期数字 + 三格胶片条(首图宽) + mono 计数;空目录行降透明度 55% 并显示虚线占位。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">1E · 正在接收相机选择</div><dc-import name="SonyEdge 重构版" initial="接收相机选择" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">相机主动推送(XPush)时在时间线顶部插入 teal 横幅,「查看」跳转传输页;设置中的“接收相机选择”开关控制该能力。</div></div>
+  </div>
+</section>
+
+<!-- ═══════════ 02 浏览与选择 ═══════════ -->
+<section>
+  <div style="font-size:19px;font-weight:700;margin-bottom:4px">02 · 浏览、多选与大图预览</div>
+  <div style="font-size:13px;color:#5C5A54;margin-bottom:18px;max-width:920px">网格全出血、缩略图 1:1 稳定比例、不显示文件名;长按进入多选(保留 <span style="font-family:'IBM Plex Mono',monospace">itemKey</span> 稳定键与 32 条分页)。多选操作收进悬浮工具条,不遮挡最后一行(滚动区底部预留 126dp)。</div>
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">2A · 照片网格(37 张)</div><dc-import name="SonyEdge 重构版" initial="照片网格" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">顶栏:返回 + 日期 + mono 计数 + 多选按钮;首次进入显示可关闭的“长按多选”提示条。加载态为 12 格脉冲骨架;500 张目录用相同布局 + lazy 加载(实例里选 7月12日 可实测滚动)。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">2B · 多选模式 — 悬浮工具条</div><dc-import name="SonyEdge 重构版" initial="网格多选" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">顶栏变为 关闭 + “已选 n 张”(n 琥珀色) + 全选/反选;底部悬浮条(12dp 圆角、模糊底) = 清除 + 实心「导入 n 张」。选中图:3dp 琥珀描边 + 左上琥珀对勾 + 缩至 0.85;未选图降透明度 75%。0 张时导入按钮禁用灰。</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">2C · 空目录</div><dc-import name="SonyEdge 重构版" initial="空相册" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">2D · 读取超时 + 重试</div><dc-import name="SonyEdge 重构版" initial="相册超时" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">2E · 大图预览(恒黑)</div><dc-import name="SonyEdge 重构版" initial="大图预览" hint-size="380px,812px"></dc-import><div style="font-size:12px;color:#949088;line-height:1.7">文件名与“12 / 37”计数用 mono;单击切换控件显隐,双击 2.2× 缩放,左右滑动翻页(阈值 45dp)。预览加载预览尺寸图,导入时才取原图并校验(保留 ProgressiveCameraImage / 邻图预取 / EXIF 方向)。控件区底部含手势安全边距 26dp。</div></div>
+  </div>
+</section>
+
+<!-- ═══════════ 03 传输 ═══════════ -->
+<section>
+  <div style="font-size:19px;font-weight:700;margin-bottom:4px">03 · 传输(五种状态)</div>
+  <div style="font-size:13px;color:#5C5A54;margin-bottom:18px;max-width:920px">任务卡以大号百分比数字为主角,mono 三行:当前文件 / 速度·剩余时间 / 张数·字节 — 与 <span style="font-family:'IBM Plex Mono',monospace">onDownloadProgress</span> 现有指标一一对应。页眉常驻保存路径 <span style="font-family:'IBM Plex Mono',monospace">DCIM/Sony Picture</span> 与「打开相册」。</div>
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">3A · 空状态</div><dc-import name="SonyEdge 重构版" initial="传输-空" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">3B · 下载中</div><dc-import name="SonyEdge 重构版" initial="传输-下载中" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">3C · 已完成</div><dc-import name="SonyEdge 重构版" initial="传输-完成" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">3D · 部分失败 → 重试失败</div><dc-import name="SonyEdge 重构版" initial="传输-部分失败" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">3E · 连接中断 → 重新连接/继续</div><dc-import name="SonyEdge 重构版" initial="传输-连接中断" hint-size="380px,812px"></dc-import></div>
+  </div>
+</section>
+
+<!-- ═══════════ 04 设置与深色 ═══════════ -->
+<section>
+  <div style="font-size:19px;font-weight:700;margin-bottom:4px">04 · 设置 与 深色模式</div>
+  <div style="font-size:13px;color:#5C5A54;margin-bottom:18px;max-width:920px">诊断日志折叠于「高级设置」,普通用户全程看不到协议术语。深色为完整夜间模式(跟随系统或手动),仅令牌切换、布局零改动;大图预览两种主题下都是纯黑。</div>
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">4A · 设置(浅色)</div><dc-import name="SonyEdge 重构版" initial="设置" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">4B · 深色 · 未连接</div><dc-import name="SonyEdge 重构版" theme="深色" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">4C · 深色 · 日期时间线</div><dc-import name="SonyEdge 重构版" theme="深色" initial="日期时间线" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">4D · 深色 · 网格多选</div><dc-import name="SonyEdge 重构版" theme="深色" initial="网格多选" hint-size="380px,812px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:384px"><div style="font-size:13px;font-weight:600;color:#5C5A54">4E · 深色 · 传输下载中</div><dc-import name="SonyEdge 重构版" theme="深色" initial="传输-下载中" hint-size="380px,812px"></dc-import></div>
+  </div>
+</section>
+
+<!-- ═══════════ 05 交互规格 ═══════════ -->
+<section style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;max-width:1560px">
+  <div style="flex:1;min-width:340px;background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">导航与跳转</div>
+    <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">底部导航 3 项:浏览 / 传输 / 设置(大图预览与多选时隐藏)
+浏览 Tab 内部层级:未连接 → 连接中 → 日期时间线 → 照片网格(无独立首页)
+导入动作(多选/预览单张) → 创建任务 + Snackbar「已加入传输队列 · 查看」
+相机推送 → 时间线顶部 teal 横幅 → 查看 → 传输页
+断开 / 忘记相机 → 二次确认弹窗(危险动作 rose 文字)
+Snackbar 固定于底栏上方 14dp,3.2s 自动消失</div>
+  </div>
+  <div style="flex:1;min-width:340px;background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">系统返回键优先级(与现有实现一致)</div>
+    <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">1. 关闭大图预览(回网格,保留滚动位置——网格常驻于预览层下方)
+2. 退出多选并清空选择
+3. 照片网格 → 日期时间线
+4. 正在连接 → 取消连接回未连接
+5. 弹窗/输入框 → 仅关闭自身
+6. 传输/设置 Tab → 回浏览 Tab → 退出应用
+下载通知点击 → 回传输页(保留现有 PendingIntent 目标)</div>
+  </div>
+  <div style="flex:1;min-width:340px;background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">动效规格</div>
+    <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">主导航切换:180ms fade-through
+进出网格层级:240ms 共享轴水平位移(本原型为 fade 简化)
+预览开合:220ms 淡入 + 图像 0.96→1.0;工具栏 220ms 反向滑入/出
+工具栏显隐:单击图片,180ms alpha + 位移
+双击缩放:250ms 至 2.2×(落地保留现有 1×–5× 捏合与边界平移)
+选中缩略图:150ms 缩放 0.85 + 描边;悬浮多选条 180ms 上滑入
+进度条:width 400ms 插值;完成态图标 scale/fade
+减少动效系统设置:去位移,仅保留短交叉淡化</div>
+  </div>
+  <div style="flex:1;min-width:340px;background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">响应式(> 360dp)</div>
+    <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">&lt; 600dp:底部导航;网格 Adaptive(minSize 108dp)≈3 列
+600–839dp:改用 NavigationRail;网格 minSize 132dp;内容列限宽 560dp 居中
+≥ 840dp:Rail + 可选双栏(左时间线 / 右网格);网格 minSize 148dp
+全部容器用 WindowInsets + contentPadding,不写死屏高;大字号下操作行换行不裁切</div>
+  </div>
+</section>
+
+<!-- ═══════════ 06 组件与代码映射 ═══════════ -->
+<section style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;max-width:1560px">
+  <div style="flex:1.4;min-width:460px;background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">组件清单 → Compose 落地</div>
+    <div style="display:grid;grid-template-columns:150px 1fr 190px;gap:7px 16px;font-size:12.5px;color:#5C5A54;line-height:1.6">
+      <div style="font-weight:600;color:#949088">组件</div><div style="font-weight:600;color:#949088">规格</div><div style="font-weight:600;color:#949088">包 / 现有对应</div>
+      <div>相机状态条</div><div>teal 8dp 呼吸点 + 机型(SG 16) + 刷新 + 断开;高 58dp</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/shell · AppHeader</div>
+      <div>设备票据卡</div><div>眉题 11 + 机型 SG 24 + SSID mono + 实心 CTA 46dp</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/browse · DisconnectedCameraState</div>
+      <div>连接步骤</div><div>竖轨 2dp + 节点 20dp,三态图标;行高 44dp</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/browse · ConnectionStepRow</div>
+      <div>日期时间线行</div><div>日 SG 30 + 月/周 10.5 + 胶片条 56/34×46 + mono 计数;行高 72dp</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/browse · FolderRow 重构</div>
+      <div>照片缩略图</div><div>1:1,2dp 间距;选中 3dp 描边 + 0.85 缩放 + 琥珀对勾 20dp</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/browse · PhotoTile + SelectCircle</div>
+      <div>悬浮多选条</div><div>左右 12dp、底 16dp;12dp 圆角、blur 背板;清除 + 导入</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/browse · SelectionBar 重构</div>
+      <div>传输任务卡</div><div>标题 14/600 + 状态 11.5 + 百分比 SG 26 + 3dp 进度 + mono×3 行</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/transfers · TransferMetrics</div>
+      <div>预览工具栏</div><div>上下渐变遮罩;文件名/计数 mono;导入实心 + 选择幽灵钮 40dp</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/preview · PhotoPreview</div>
+      <div>空/错误状态</div><div>图标 44 + 标题 15/600 + 说明 12.5 + 单操作按钮</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/browse · EmptyState</div>
+      <div>确认弹窗</div><div>宽 ≤300dp、8dp 圆角;危险确认 rose 700</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">AlertDialog 定制</div>
+      <div>Snackbar</div><div>反色底(浅色页深底);动作字 snact 700</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">SnackbarHost 定制</div>
+      <div>设置分组卡</div><div>眉题 11/0.12em;行 48–56dp;开关 44×24 自绘或 M3 Switch</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px">ui/settings · SettingsScreen</div>
+    </div>
+  </div>
+  <div style="flex:1;min-width:340px;background:#fff;border:1px solid #E5E2DB;border-radius:8px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">落地边界(不改动项)</div>
+    <div style="font-size:13px;color:#5C5A54;line-height:2;white-space:pre-line">保留:connectAndBrowse 发现/端点缓存、autoNextDateFolder 停在 Date 层、32 条分页、folderCache/browseRequestId、原图候选探测与 DownloadValidator、128MiB 内存 / 512MiB 磁盘 / 7 天 TTL 图片缓存、前台串行下载与通知
+文案改写:所有 UI 文字中文;IP/DMS/SSDP/PhotoRoot 等仅出现在诊断日志导出内容里
+命名:界面上“传输”对应代码 Transfers/Imports;“日期时间线”即 Date 层文件夹列表
+图片:缩略图→大预览→原图三级,与现有 resource 选择逻辑一致
+本文档全部实例由 SonyEdge 重构版.dc.html 驱动,右侧 Tweaks 可切 16 种状态自查</div>
+  </div>
+</section>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -252,13 +252,42 @@ public final class DmsContentClient {
         }
     }
 
+    /**
+     * 仅请求目录首页的前 requestedCount 条（单次 Browse 请求）。
+     * 供 UI 层做日期时间线缩略图预取；完整分页浏览路径不受影响。
+     */
+    public DmsBrowseResult browseFirstItems(String objectId, int requestedCount) throws Exception {
+        String safeObjectId = value(objectId).isEmpty() ? "0" : objectId;
+        ensureSortCapabilities();
+        BrowsePage page;
+        try {
+            page = browsePage(safeObjectId, 0, sortCriteria, Math.max(1, requestedCount));
+        } catch (UpnpException exception) {
+            if (sortCriteria.isEmpty()) {
+                throw exception;
+            }
+            page = browsePage(safeObjectId, 0, "", Math.max(1, requestedCount));
+        }
+        DmsBrowseResult result = new DmsBrowseResult(safeObjectId);
+        result.numberReturned = page.numberReturned;
+        result.totalMatches = page.totalMatches;
+        result.updateId = page.updateId;
+        result.sortCriteria = sortCriteria;
+        addPageItems(page.document, result);
+        return result;
+    }
+
     private BrowsePage browsePage(String objectId, int startingIndex, String criteria) throws Exception {
+        return browsePage(objectId, startingIndex, criteria, BROWSE_PAGE_SIZE);
+    }
+
+    private BrowsePage browsePage(String objectId, int startingIndex, String criteria, int requestedCount) throws Exception {
         UpnpSoapClient.Response response = soapClient.call("Browse", UpnpSoapClient.arguments(
                 "ObjectID", objectId,
                 "BrowseFlag", "BrowseDirectChildren",
                 "Filter", "*",
                 "StartingIndex", startingIndex,
-                "RequestedCount", BROWSE_PAGE_SIZE,
+                "RequestedCount", requestedCount,
                 "SortCriteria", criteria
         ));
         String didl = response.text("Result");
