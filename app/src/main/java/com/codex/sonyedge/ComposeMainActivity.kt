@@ -10,16 +10,26 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
+import com.codex.sonyedge.ui.shell.SonyEdgeActions
+import com.codex.sonyedge.ui.shell.SonyEdgeApp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 class ComposeMainActivity : ComponentActivity() {
     private lateinit var viewModel: SonyEdgeViewModel
     private var downloadReceiver: BroadcastReceiver? = null
+    private val qrScanner = registerForActivityResult(ScanContract()) { result ->
+        if (::viewModel.isInitialized) {
+            viewModel.submitCameraQrCode(result.contents)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,38 +37,60 @@ class ComposeMainActivity : ComponentActivity() {
             this,
             ViewModelProvider.AndroidViewModelFactory.getInstance(application)
         )[SonyEdgeViewModel::class.java]
-        configureBars()
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         requestNeededPermissions()
         registerDownloadReceiver()
+        val actions = SonyEdgeActions(
+            onTab = viewModel::selectTab,
+            onConnectCameraWifi = {
+                if (viewModel.uiState.value.rememberedCamera == null) {
+                    launchCameraQrScanner()
+                } else {
+                    viewModel.connectCameraWifi()
+                }
+            },
+            onScanCameraQr = ::launchCameraQrScanner,
+            onSubmitCameraCredentials = viewModel::submitCameraCredentials,
+            onDismissCameraCredentials = viewModel::dismissCameraCredentials,
+            onConnectCurrentWifi = viewModel::connectCurrentWifi,
+            onCancelCameraConnection = viewModel::cancelCameraConnection,
+            onAddCamera = viewModel::addCamera,
+            onDisconnectCamera = viewModel::disconnectCamera,
+            onForgetCamera = viewModel::forgetCamera,
+            onRefresh = viewModel::refresh,
+            onBack = viewModel::backFromCameraContent,
+            onOpenFolder = viewModel::openFolder,
+            onPreview = viewModel::showPreview,
+            onClosePreview = viewModel::closePreview,
+            onPreviewNext = viewModel::previewNext,
+            onPreviewPage = viewModel::setPreviewIndex,
+            onToggleSelection = viewModel::toggleSelection,
+            onSelectAll = viewModel::selectAllVisible,
+            onClearSelection = viewModel::clearSelection,
+            onInvertSelection = viewModel::invertSelection,
+            onEnterSelection = viewModel::enterSelectionMode,
+            onExitSelection = viewModel::exitSelectionMode,
+            onDownloadSelected = viewModel::downloadSelected,
+            onDownloadPreview = viewModel::downloadPreview,
+            onCancelDownloads = viewModel::cancelDownloads,
+            onRetryFailed = viewModel::retryFailed,
+            onReceiveCameraSelection = viewModel::receiveCameraSelection,
+            onOpenGallery = ::openGallery,
+            onClearLogs = viewModel::clearLogs,
+            onExportLogs = ::exportDiagnosticLogs,
+            onSetThemeMode = viewModel::setThemeMode,
+            onSetReceiveSelection = viewModel::setReceiveCameraSelection,
+            onDismissGridHint = viewModel::dismissGridHint,
+            onClearThumbnailCache = viewModel::clearThumbnailCache,
+            onConsumeTransientMessage = viewModel::consumeTransientMessage
+        )
         setContent {
             val state = viewModel.uiState.collectAsState().value
             BackHandler(enabled = state.shouldHandleBack) {
                 viewModel.handleBack()
             }
-            SonyEdgeApp(
-                state = state,
-                onTab = viewModel::selectTab,
-                onConnect = viewModel::connectAndBrowse,
-                onRefresh = viewModel::refresh,
-                onRoot = viewModel::browseRoot,
-                onBack = viewModel::goBack,
-                onOpenFolder = viewModel::openFolder,
-                onPreview = viewModel::showPreview,
-                onClosePreview = viewModel::closePreview,
-                onPreviewNext = viewModel::previewNext,
-                onPreviewPage = viewModel::setPreviewIndex,
-                onToggleSelection = viewModel::toggleSelection,
-                onSelectAll = viewModel::selectAllVisible,
-                onClearSelection = viewModel::clearSelection,
-                onInvertSelection = viewModel::invertSelection,
-                onDownloadSelected = viewModel::downloadSelected,
-                onDownloadPreview = viewModel::downloadPreview,
-                onCancelDownloads = viewModel::cancelDownloads,
-                onRetryFailed = viewModel::retryFailed,
-                onReceiveCameraSelection = viewModel::receiveCameraSelection,
-                onOpenGallery = ::openGallery,
-                onClearLogs = viewModel::clearLogs
-            )
+            SonyEdgeApp(state = state, actions = actions)
         }
     }
 
@@ -72,17 +104,16 @@ class ComposeMainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun configureBars() {
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.statusBarColor = android.graphics.Color.rgb(250, 251, 253)
-        window.navigationBarColor = android.graphics.Color.WHITE
-        if (Build.VERSION.SDK_INT >= 23) {
-            var flags = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            if (Build.VERSION.SDK_INT >= 26) {
-                flags = flags or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            }
-            window.decorView.systemUiVisibility = flags
+    private fun launchCameraQrScanner() {
+        val options = ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            setCaptureActivity(SonyQrCaptureActivity::class.java)
+            setPrompt("扫描索尼相机屏幕上的 Wi-Fi 二维码")
+            setBeepEnabled(false)
+            setBarcodeImageEnabled(false)
+            setOrientationLocked(true)
         }
+        qrScanner.launch(options)
     }
 
     private fun requestNeededPermissions() {
@@ -92,7 +123,9 @@ class ComposeMainActivity : ComponentActivity() {
         ) {
             permissions += Manifest.permission.POST_NOTIFICATIONS
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT <= 32 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
             permissions += Manifest.permission.ACCESS_FINE_LOCATION
         }
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -127,7 +160,31 @@ class ComposeMainActivity : ComponentActivity() {
             }
             startActivity(intent)
         } catch (_: Exception) {
-            Toast.makeText(this, "No gallery app available", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "没有可用的相册应用", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 高级 → 导出诊断日志：通过系统分享面板导出（协议术语仅存在于日志内容中）。 */
+    private fun exportDiagnosticLogs() {
+        val logs = viewModel.uiState.value.logs
+        if (logs.isEmpty()) {
+            Toast.makeText(this, "暂无诊断日志", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val body = buildString {
+            appendLine("SonyEdge 诊断日志 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine()
+            logs.asReversed().forEach { appendLine(it) }
+        }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "SonyEdge 诊断日志")
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        try {
+            startActivity(Intent.createChooser(intent, "导出诊断日志"))
+        } catch (_: Exception) {
+            Toast.makeText(this, "无法导出日志", Toast.LENGTH_SHORT).show()
         }
     }
 }

@@ -398,3 +398,131 @@
   - `build/device-screenshots/sonyedge-v011-reset-swipe.png`
   - `build/device-screenshots/sonyedge-v012-zoom-pan.png`
   - `build/device-screenshots/sonyedge-v012-reset-swipe.png`
+
+## 2026-07-22 Camera Browse Navigation Cleanup
+
+### Implemented in this iteration
+- Back from a single-day photo grid now restores the cached `Date` folder list.
+- Back from the `Date` list returns to the connected camera home without exposing the internal `Camera` or `PhotoRoot` containers.
+- Removed the duplicate folder summary row from the `Date` list.
+- Removed the protocol breadcrumb from a single-day photo grid.
+- Removed filename overlays from photo thumbnails while retaining tap-to-preview and selection behavior.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.4`, `versionCode=36`.
+- Installed successfully on ADB device `909e29e1` and connected to `DIRECT-leE1:ILCE-7RM3` at `192.168.122.1`.
+- Confirmed both the Android system Back action and the page toolbar Back action return from `2026-7-21` to `Date`.
+- Confirmed both Back paths return from `Date` to the connected camera home.
+- Confirmed the `Date` page has one summary only, and the 37-photo page has no breadcrumb or filename overlays.
+- Opened `DSC06913.JPG` from the cleaned thumbnail grid to verify preview navigation remains available.
+
+## 2026-07-22 Local-only Wi-Fi Preview Routing Fix
+
+### Implemented in this iteration
+- Route every Compose thumbnail and large-preview HTTP request through the `CameraWifiBinding` network selected by the one-tap camera connection flow.
+- Hold the Wi-Fi lease until the response body has been read, then release it through the existing reference-counted binding.
+- Log HTTP status and transport failures instead of silently leaving the loading placeholder on screen.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.5`, `versionCode=37`.
+- Installed successfully on ADB device `909e29e1` and performed a fresh one-tap connection to `DIRECT-leE1:ILCE-7RM3`.
+- Opened `2026-7-21`; all 15 initially visible `TN_*.JPG` resources loaded through camera network `169` in about two seconds.
+- Opened `DSC06913.JPG`; its 888,917-byte `LRG_DSC06913.JPG` preview loaded in under one second and replaced the loading state.
+- Imported the original `DSC06913.JPG`: 36,012,032-byte JPEG, 1 success, 0 failures.
+- After the download released its Wi-Fi lease, scrolled to uncached photos and confirmed another set of thumbnail requests loaded successfully.
+
+## 2026-07-23 Automatic Camera Selection Detection
+
+### Implemented in this iteration
+- Detect camera-side selection mode from `XPushList + ContentDirectory` service advertisement immediately after connection discovery.
+- Skip the normal DMS root preload in camera-selection mode and start the existing XPush receive/import flow automatically.
+- Keep normal connected-home browsing unchanged when `XPushList` is absent.
+- Share one guarded receive request between automatic detection and the Settings diagnostic action.
+- Reject stale results after disconnect/reconnect and keep each request scoped to its own XPush guard.
+- Show a receiving state on the connected home and disable the manual receive action while setup is active.
+- Attempt `X_TransferEnd` before releasing the requested camera Wi-Fi when cancelling or disconnecting an active setup.
+- Start the download handoff as a foreground service on Android 8 and newer.
+- Treat the camera closing its Wi-Fi after a terminal XPush transfer as a normal completion, preserving the Imports result instead of showing a connection error.
+
+### Verification status
+- Capability detection unit tests cover usable XPush, missing control URL, and missing ContentDirectory.
+- Transfer-state unit tests cover active, completed, cancelled, and fatal download states.
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.7`, `versionCode=39`.
+- Installed successfully on ADB device `909e29e1` and connected to `DIRECT-leE1:ILCE-7RM3`.
+- In camera-side selection mode, discovery advertised both `ContentDirectory` and `XPushList`; SonyEdge automatically executed `X_TransferStart`, `X_GetPushRoot`, and browsed `PushRoot` without opening Settings.
+- Imported `DSC06885.JPG`: 21,037,056-byte JPEG, 1 success, 0 failures, saved to `DCIM/Sony Picture`.
+- Confirmed `X_TransferProgress 1/1` and `X_TransferEnd errCode=0` both returned HTTP 200.
+- After the camera closed its Wi-Fi, SonyEdge remained on the Imports page with `Import complete`, while Android returned to the previous home Wi-Fi.
+- Crash log buffer was empty after the transfer.
+- In normal camera-browse mode, the same camera advertised three services without `XPushList`; SonyEdge did not start XPush and followed the DMS browsing path.
+- Confirmed automatic navigation through `PhotoRoot / Date`, six visible date folders, and a 76-photo folder loaded in three DMS pages.
+- Confirmed the visible three-column grid loaded its thumbnail resources through the camera network.
+- Opened `DSC06822.JPG`; its 578,433-byte `LRG_DSC06822.JPG` preview loaded successfully.
+- Crash log buffer remained empty after the normal browse regression.
+
+## 2026-07-23 First-use Camera QR Connection
+
+### Implemented in this iteration
+- Added offline Sony Wi-Fi QR scanning with ZXing Android Embedded.
+- Parse `W01` payloads into the `DIRECT-<suffix>:<model>` SSID, password, model, and camera identity.
+- Use the existing Android `WifiNetworkSpecifier` connection path after a successful scan.
+- Probe the common `192.168.122.1:64321` endpoint before SSDP without making it a compatibility requirement.
+- Verify the scanned camera identity against the SSDP device UDN when that identity is advertised.
+- Store the camera identity beside the existing Keystore-encrypted Wi-Fi profile after service verification succeeds.
+- Keep manual SSID/password entry hidden until QR scanning or QR-initiated connection fails.
+- Preserve one-tap reconnect for a successfully remembered camera.
+
+### Verification status
+- Sony QR parser unit tests cover the supplied A7R III payload, separated identity normalization, invalid prefixes, missing and duplicate fields, invalid identities, and UDN identity extraction.
+- `:app:testDebugUnitTest`, `:app:compileDebugKotlin`, and `:app:assembleDebug` succeeded.
+- The first installed scanner build exposed ZXing's default landscape orientation, so a project-owned portrait capture activity was added for the follow-up `versionName=0.5.9`, `versionCode=41` build.
+- Installed `0.5.9 (41)` on device `909e29e1` and completed a first-use scan after removing the previous saved camera.
+- Scanned the camera's real QR code in portrait orientation and connected to `DIRECT-leE1:ILCE-7RM3`; discovery resolved the camera service at `192.168.122.1`.
+- Confirmed the saved profile contains model `ILCE-7RM3`, identity `E8E8B7349C13`, and the SSID. The Wi-Fi password is stored only as Android Keystore AES-GCM ciphertext and an initialization vector.
+- Browsed `PhotoRoot / Date`, opened the 37-item `2026-7-21` folder, loaded the three-column thumbnail grid, and opened the large preview for `DSC06913.JPG`.
+- Imported the 34.3 MB `DSC06913.JPG` original to `DCIM/Sony Picture`: 1 imported, 0 failed, about 1.4 MB/s over 25 seconds.
+- Disconnected, returned to the normal phone Wi-Fi, and reconnected to the remembered camera with one tap and without reopening the scanner.
+- Cancelled a later "scan another camera" attempt and confirmed manual SSID/password entry became available only after that scan failure.
+- Android's crash log buffer remained empty after the complete connection, browse, preview, download, disconnect, reconnect, and fallback regression.
+
+### Screenshot evidence
+- `app/build/device-screenshots/qr-first-browse-v059.png`
+- `app/build/device-screenshots/qr-first-preview-v059.png`
+
+## 2026-07-23 Android 16 Preview Window Compatibility
+
+### Root cause and implementation
+- Reproduced the clipped photo-preview controls on OPPO `PGEM10`, Android 16, at `1440x3168` with a `640 dpi` display-density override.
+- UI Automator showed the preview action nodes extending to the physical bottom edge, leaving most of the controls outside the visible screen.
+- Window diagnostics showed the full-screen Compose `Dialog` receiving an incompatible surface/content measurement on this ColorOS build.
+- Changing only `decorFitsSystemWindows` in the intermediate `0.5.10 (42)` build did not correct the layout.
+- Replaced the platform full-screen `Dialog` with an Activity-owned full-screen Compose overlay and added `BackHandler` so system Back still closes the preview.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.11`, `versionCode=43`.
+- Installed `0.5.11 (43)` on device `a109cf4`, reconnected to `DIRECT-leE1:ILCE-7RM3`, opened the 37-item `2026-7-21` folder, and loaded `DSC06913.JPG`.
+- Confirmed the previous, import, select, and next controls are fully visible. Their lowest UI Automator bound is `y=3124`, within the `3168 px` display.
+- Confirmed both the next button and a horizontal swipe advance from `1 / 37` to `2 / 37`.
+- Confirmed system Back returns from the preview to the 37-item grid.
+- Cleared the Android crash buffer before the final interaction regression; no crash entries were produced.
+
+### Screenshot evidence
+- Before: `app/build/device-screenshots/preview-android16-pgem10.png`
+- Fixed: `app/build/device-screenshots/preview-android16-pgem10-v0511.png`
+
+## 2026-07-23 Photo Preview Transition
+
+### Implemented in this iteration
+- Keep the preview overlay in the Compose hierarchy so opening and closing can both animate instead of appearing or disappearing in one frame.
+- Retain the last preview index until the exit transition finishes, preventing the image from jumping back to the first item while closing.
+- Fade the full preview in and out, then animate the top metadata bar and bottom action bar from their nearest screen edges.
+- Keep horizontal photo paging independent from the page transition so moving between photos does not replay the full-screen entrance.
+- Replaced an intermediate full-screen scale transition after device frame statistics showed that scaling the entire `1440x3168` overlay was unnecessarily expensive.
+
+### Verification status
+- `:app:testDebugUnitTest` and `:app:assembleDebug` succeeded for `versionName=0.5.13`, `versionCode=45`.
+- Installed `0.5.13 (45)` on CPH2025 device `909e29e1`, reconnected to the camera, and opened the 37-item `2026-7-21` folder.
+- A warm-cache open/close frame-stat run rendered 60 frames with 4 janky frames (6.67%), a 9 ms median, a 15 ms 90th percentile, and no slow bitmap uploads.
+- Confirmed horizontal swipe still advances from `1 / 37` to `2 / 37`.
+- Confirmed the close button completes the exit transition and returns to the 37-item grid.
+- Cleared the Android crash buffer before the regression; no crash entries were produced.
