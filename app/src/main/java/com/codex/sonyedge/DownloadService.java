@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -15,6 +16,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.EOFException;
 import java.io.File;
@@ -63,6 +65,7 @@ public class DownloadService extends Service {
     public static final String EXTRA_XPUSH_TOTAL = "xpush_total";
     public static final String EXTRA_BATCH_TITLE = "batch_title";
     public static final String EXTRA_QUEUE_SIZE = "queue_size";
+    public static final String EXTRA_QUEUE_DETAILS = "queue_details";
 
     public static final String STATE_STARTED = "started";
     public static final String STATE_FILE_STARTED = "file_started";
@@ -711,6 +714,7 @@ public class DownloadService extends Service {
     }
 
     private static final class BatchRun {
+        final long queueId;
         final String itemsJson;
         final AtomicBoolean cancelled = new AtomicBoolean(false);
         final AtomicBoolean terminalPublished = new AtomicBoolean(false);
@@ -730,6 +734,7 @@ public class DownloadService extends Service {
                 int xPushTotal,
                 String batchTitle
         ) {
+            this.queueId = startId & 0xffffffffL;
             this.itemsJson = itemsJson;
             this.latestStartId = new AtomicInteger(startId);
             this.xPushTotal = Math.max(0, xPushTotal);
@@ -738,6 +743,14 @@ public class DownloadService extends Service {
             this.xPushClient = controlUrl.isEmpty()
                     ? null
                     : new XPushListClient(controlUrl, xPushServiceType, new StringBuilder());
+        }
+
+        int itemCount() {
+            try {
+                return new JSONArray(itemsJson == null ? "[]" : itemsJson).length();
+            } catch (Exception ignored) {
+                return 0;
+            }
         }
 
         void cancel() {
@@ -773,24 +786,25 @@ public class DownloadService extends Service {
 
     private void saveToPublicDcim(BatchRun run, File source, String filename, String contentType) throws Exception {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            String outputFilename = uniqueMediaStoreFilename(filename, contentType);
             ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, outputFilename);
             values.put(MediaStore.MediaColumns.MIME_TYPE,
-                    contentType == null ? mimeFromFilename(filename) : contentType);
+                    contentType == null ? mimeFromFilename(outputFilename) : contentType);
             values.put(MediaStore.MediaColumns.RELATIVE_PATH, PUBLIC_OUTPUT_DIR);
             values.put(MediaStore.MediaColumns.IS_PENDING, 1);
 
             Uri uri = null;
             try {
-                uri = getContentResolver().insert(mediaStoreUriFor(filename, contentType), values);
+                uri = getContentResolver().insert(mediaStoreUriFor(outputFilename, contentType), values);
                 if (uri == null) {
-                    throw new IllegalStateException("Cannot create MediaStore entry for " + filename);
+                    throw new IllegalStateException("Cannot create MediaStore entry for " + outputFilename);
                 }
                 long copied;
                 try (InputStream input = new FileInputStream(source);
                      OutputStream output = getContentResolver().openOutputStream(uri)) {
                     if (output == null) {
-                        throw new IllegalStateException("Cannot open MediaStore output for " + filename);
+                        throw new IllegalStateException("Cannot open MediaStore output for " + outputFilename);
                     }
                     copied = copy(run, input, output);
                 }
@@ -877,6 +891,49 @@ public class DownloadService extends Service {
             candidate = new File(dir, base + "_" + i + ext);
             if (!candidate.exists()) {
                 return candidate;
+            }
+        }
+    }
+
+    private String uniqueMediaStoreFilename(String filename, String contentType) {
+        String candidate = filename;
+        if (!mediaStoreEntryExists(candidate, contentType)) {
+            return candidate;
+        }
+        int dot = filename.lastIndexOf('.');
+        String base = dot > 0 ? filename.substring(0, dot) : filename;
+        String ext = dot > 0 ? filename.substring(dot) : "";
+        for (int i = 1; ; i++) {
+            candidate = base + "_" + i + ext;
+            if (!mediaStoreEntryExists(candidate, contentType)) {
+                return candidate;
+            }
+        }
+    }
+
+    private boolean mediaStoreEntryExists(String filename, String contentType) {
+        Cursor cursor = null;
+        try {
+            String relativePath = PUBLIC_OUTPUT_DIR + "/";
+            String selection = "(" + MediaStore.MediaColumns.DISPLAY_NAME + "=? AND "
+                    + MediaStore.MediaColumns.RELATIVE_PATH + "=?) OR ("
+                    + MediaStore.MediaColumns.DISPLAY_NAME + "=? AND "
+                    + MediaStore.MediaColumns.RELATIVE_PATH + "=?)";
+            String[] args = {filename, relativePath, filename, PUBLIC_OUTPUT_DIR};
+            cursor = getContentResolver().query(
+                    mediaStoreUriFor(filename, contentType),
+                    new String[]{MediaStore.MediaColumns._ID},
+                    selection,
+                    args,
+                    null
+            );
+            return cursor != null && cursor.moveToFirst();
+        } catch (Exception ex) {
+            Log.w(TAG, "Cannot check MediaStore filename collision for " + filename, ex);
+            return false;
+        } finally {
+            if (cursor != null) {
+                cursor.close();
             }
         }
     }
@@ -1111,6 +1168,7 @@ public class DownloadService extends Service {
         intent.putExtra(EXTRA_BATCH_BYTES_DONE, batchBytesDone);
         intent.putExtra(EXTRA_ELAPSED_SECONDS, elapsedSeconds);
         intent.putExtra(EXTRA_QUEUE_SIZE, pendingQueueSize());
+        intent.putExtra(EXTRA_QUEUE_DETAILS, pendingQueueJson());
         BatchRun currentRun = activeBatch.get();
         if (currentRun != null && !currentRun.batchTitle.isEmpty()) {
             intent.putExtra(EXTRA_BATCH_TITLE, currentRun.batchTitle);
@@ -1122,6 +1180,24 @@ public class DownloadService extends Service {
         synchronized (queueLock) {
             return pendingBatches.size();
         }
+    }
+
+    private String pendingQueueJson() {
+        JSONArray queue = new JSONArray();
+        synchronized (queueLock) {
+            for (BatchRun run : pendingBatches) {
+                try {
+                    JSONObject item = new JSONObject();
+                    item.put("id", run.queueId);
+                    item.put("title", run.batchTitle);
+                    item.put("total", run.itemCount());
+                    queue.put(item);
+                } catch (Exception ignored) {
+                    // A malformed queue entry should not block progress broadcasts.
+                }
+            }
+        }
+        return queue.toString();
     }
 
     private long elapsedSeconds(long startedAt) {

@@ -79,6 +79,13 @@ data class TransferRecord(
     val outcome: TransferOutcome
 )
 
+/** 当前下载完成后将按顺序执行的导入批次。 */
+data class QueuedTransfer(
+    val id: Long,
+    val title: String,
+    val total: Int
+)
+
 private data class CachedFolder(
     val id: String,
     val title: String,
@@ -138,6 +145,8 @@ data class SonyEdgeUiState(
     val transferHistory: List<TransferRecord> = emptyList(),
     /** 等待当前导入完成的批次数，不包含正在执行的批次。 */
     val queuedTransferCount: Int = 0,
+    /** 等待当前导入完成的批次明细，顺序与服务端队列一致。 */
+    val queuedTransfers: List<QueuedTransfer> = emptyList(),
     /** 一次性 Snackbar 消息 */
     val transientMessage: String? = null,
     /** 连接失败发生在第几步（0=Wi-Fi 1=验证 2=准备） */
@@ -1470,6 +1479,10 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val message = intent.getStringExtra(DownloadService.EXTRA_MESSAGE).orEmpty()
         val state = intent.getStringExtra(DownloadService.EXTRA_STATE).orEmpty()
         val queuedTransferCount = intent.getIntExtra(DownloadService.EXTRA_QUEUE_SIZE, 0).coerceAtLeast(0)
+        val queueDetailsJson = intent.getStringExtra(DownloadService.EXTRA_QUEUE_DETAILS).orEmpty()
+        val queueDetails = parseQueuedTransfers(queueDetailsJson)
+        val hasQueueDetails = queueDetailsJson.isNotBlank()
+        val effectiveQueueCount = if (hasQueueDetails) queueDetails.size else queuedTransferCount
         val batchTitle = intent.getStringExtra(DownloadService.EXTRA_BATCH_TITLE).orEmpty()
         val total = intent.getIntExtra(DownloadService.EXTRA_TOTAL, 1).coerceAtLeast(1)
         val index = intent.getIntExtra(DownloadService.EXTRA_INDEX, 0).coerceAtLeast(0)
@@ -1493,7 +1506,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 current.copy(
                     activeTab = SonyEdgeTab.Transfers,
                     downloadMessage = message.ifBlank { current.downloadMessage },
-                    queuedTransferCount = queuedTransferCount,
+                    queuedTransferCount = effectiveQueueCount,
+                    queuedTransfers = if (hasQueueDetails) queueDetails else current.queuedTransfers,
                     transferEvents = events
                 )
             }
@@ -1554,11 +1568,27 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 downloadEtaSeconds = etaSeconds,
                 downloadBatchBytesDone = batchBytesDone,
                 downloadElapsedSeconds = elapsedSeconds,
-                queuedTransferCount = queuedTransferCount,
+                queuedTransferCount = effectiveQueueCount,
+                queuedTransfers = if (hasQueueDetails) queueDetails else current.queuedTransfers,
                 transferEvents = events,
                 failedItems = failedItems
             )
         }
+    }
+
+    private fun parseQueuedTransfers(json: String): List<QueuedTransfer> {
+        if (json.isBlank()) return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).mapNotNull { index ->
+                val item = array.optJSONObject(index) ?: return@mapNotNull null
+                QueuedTransfer(
+                    id = item.optLong("id", index.toLong()),
+                    title = item.optString("title").ifBlank { "导入任务" },
+                    total = item.optInt("total", 0).coerceAtLeast(0)
+                )
+            }
+        }.getOrDefault(emptyList())
     }
 
     fun clearLogs() {
@@ -1891,7 +1921,7 @@ fun supportsCameraSelection(session: SonyCameraSession): Boolean =
         }
 
 fun isDownloadTransferActive(state: SonyEdgeUiState): Boolean =
-    state.queuedTransferCount > 0 ||
+    state.queuedTransferCount > 0 || state.queuedTransfers.isNotEmpty() ||
         (state.downloadTotal > 0 &&
         state.downloadProgress < state.downloadTotal &&
         state.downloadState in setOf(
