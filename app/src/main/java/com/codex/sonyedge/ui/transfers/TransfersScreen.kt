@@ -100,6 +100,26 @@ fun TransfersScreen(state: SonyEdgeUiState, actions: SonyEdgeActions) {
                         ActiveTransferCard(state, actions, interrupted = disconnected)
                     }
                 }
+                if (state.queuedTransferCount > 0) {
+                    item(key = "queued") {
+                        TokenCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "还有 ${state.queuedTransferCount} 个导入任务排队",
+                                    color = colors.text1,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                MonoText(
+                                    "当前任务完成后会按顺序继续导入",
+                                    color = colors.text3,
+                                    fontSize = 12.5.sp
+                                )
+                            }
+                        }
+                    }
+                }
                 items(state.transferHistory, key = { it.id }) { record ->
                     HistoryTransferCard(
                         record = record,

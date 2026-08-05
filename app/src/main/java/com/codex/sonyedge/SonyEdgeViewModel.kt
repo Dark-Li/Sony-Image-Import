@@ -136,6 +136,8 @@ data class SonyEdgeUiState(
     val downloadCurrentFile: String = "",
     /** 已结束批次的历史记录（最新在前） */
     val transferHistory: List<TransferRecord> = emptyList(),
+    /** 等待当前导入完成的批次数，不包含正在执行的批次。 */
+    val queuedTransferCount: Int = 0,
     /** 一次性 Snackbar 消息 */
     val transientMessage: String? = null,
     /** 连接失败发生在第几步（0=Wi-Fi 1=验证 2=准备） */
@@ -143,7 +145,10 @@ data class SonyEdgeUiState(
     /** 日期目录 id → 前 3 张内容（时间线胶片条，仅来自已缓存目录） */
     val folderPreviews: Map<String, List<CameraContentItem>> = emptyMap(),
     /** 流式浏览中目录的总条数（0 = 未在流式加载），网格顶栏显示 n/total */
-    val browseTotalCount: Int = 0
+    val browseTotalCount: Int = 0,
+    /** 照片网格离开页面时的滚动位置，返回时恢复。 */
+    val gridFirstVisibleItemIndex: Int = 0,
+    val gridFirstVisibleItemOffset: Int = 0
 ) {
     /** 是否位于某个日期目录内（照片网格层） */
     val insideDateFolder: Boolean
@@ -784,6 +789,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 selectedKeys = emptySet(),
                 selectionMode = false,
                 previewIndex = null,
+                gridFirstVisibleItemIndex = 0,
+                gridFirstVisibleItemOffset = 0,
                 cameraSelectionReceiving = false
             )
         }
@@ -856,6 +863,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 selectedKeys = emptySet(),
                 selectionMode = false,
                 previewIndex = null,
+                gridFirstVisibleItemIndex = 0,
+                gridFirstVisibleItemOffset = 0,
                 cameraSelectionReceiving = false,
                 folderPreviews = emptyMap()
             )
@@ -1023,6 +1032,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 photos = emptyList(),
                 selectedKeys = emptySet(),
                 previewIndex = null,
+                gridFirstVisibleItemIndex = 0,
+                gridFirstVisibleItemOffset = 0,
                 browseTotalCount = 0
             )
         }
@@ -1134,6 +1145,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 photos = cached.photos,
                 selectedKeys = emptySet(),
                 previewIndex = null,
+                gridFirstVisibleItemIndex = 0,
+                gridFirstVisibleItemOffset = 0,
                 browseTotalCount = 0
             )
         }
@@ -1219,12 +1232,30 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     fun downloadPreview() {
         val state = _uiState.value
         val item = state.previewIndex?.let { state.photos.getOrNull(it) } ?: return
+        val selectedItems = state.photos.filter { state.selectedKeys.contains(itemKey(it)) }
         closePreview()
-        startDownload(listOf(item))
+        startDownload(if (selectedItems.isEmpty()) listOf(item) else selectedItems)
     }
 
     fun retryFailed() {
         startDownload(_uiState.value.failedItems)
+    }
+
+    fun setGridScrollPosition(index: Int, offset: Int) {
+        val safeIndex = index.coerceAtLeast(0)
+        val safeOffset = offset.coerceAtLeast(0)
+        _uiState.update { state ->
+            if (state.gridFirstVisibleItemIndex == safeIndex &&
+                state.gridFirstVisibleItemOffset == safeOffset
+            ) {
+                state
+            } else {
+                state.copy(
+                    gridFirstVisibleItemIndex = safeIndex,
+                    gridFirstVisibleItemOffset = safeOffset
+                )
+            }
+        }
     }
 
     fun receiveCameraSelection() {
@@ -1346,11 +1377,18 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val pushKeys = selection?.items?.mapTo(hashSetOf()) { itemKey(it) }.orEmpty()
         val usesCameraSelection = pushKeys.isNotEmpty() && requestedItems.any { itemKey(it) in pushKeys }
         val items = if (usesCameraSelection) selection!!.items else requestedItems
+        val batchTitle = if (usesCameraSelection) {
+            "相机选择"
+        } else {
+            formatDateFolderTitle(_uiState.value.currentFolderTitle)
+        }
+        val activeBatchAlreadyRunning = isDownloadTransferActive(_uiState.value)
         val array = JSONArray()
         items.forEach { array.put(it.toJson()) }
         val intent = Intent(getApplication(), DownloadService::class.java).apply {
             action = DownloadService.ACTION_START
             putExtra(DownloadService.EXTRA_ITEMS, array.toString())
+            putExtra(DownloadService.EXTRA_BATCH_TITLE, batchTitle)
             if (usesCameraSelection) {
                 putExtra(DownloadService.EXTRA_XPUSH_CONTROL_URL, selection!!.controlUrl)
                 putExtra(DownloadService.EXTRA_XPUSH_SERVICE_TYPE, selection.serviceType)
@@ -1381,10 +1419,18 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             setError("Unable to start import: ${ex.message}", SonyEdgeTab.Transfers)
             return
         }
-        val batchTitle = if (usesCameraSelection) {
-            "相机选择"
-        } else {
-            formatDateFolderTitle(_uiState.value.currentFolderTitle)
+        if (activeBatchAlreadyRunning) {
+            _uiState.update { current ->
+                current.copy(
+                    activeTab = SonyEdgeTab.Transfers,
+                    selectedKeys = emptySet(),
+                    selectionMode = false,
+                    downloadMessage = "Queued ${items.size} imports after the current task.",
+                    transferEvents = (listOf("Queued ${items.size} imports after the current task.") +
+                        current.transferEvents).take(80)
+                )
+            }
+            return
         }
         _uiState.update {
             it.copy(
@@ -1423,6 +1469,8 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
     fun onDownloadProgress(intent: Intent) {
         val message = intent.getStringExtra(DownloadService.EXTRA_MESSAGE).orEmpty()
         val state = intent.getStringExtra(DownloadService.EXTRA_STATE).orEmpty()
+        val queuedTransferCount = intent.getIntExtra(DownloadService.EXTRA_QUEUE_SIZE, 0).coerceAtLeast(0)
+        val batchTitle = intent.getStringExtra(DownloadService.EXTRA_BATCH_TITLE).orEmpty()
         val total = intent.getIntExtra(DownloadService.EXTRA_TOTAL, 1).coerceAtLeast(1)
         val index = intent.getIntExtra(DownloadService.EXTRA_INDEX, 0).coerceAtLeast(0)
         val success = intent.getIntExtra(DownloadService.EXTRA_SUCCESS, 0).coerceAtLeast(0)
@@ -1435,6 +1483,22 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
         val etaSeconds = intent.getLongExtra(DownloadService.EXTRA_ETA_SECONDS, 0).coerceAtLeast(0)
         val batchBytesDone = intent.getLongExtra(DownloadService.EXTRA_BATCH_BYTES_DONE, 0).coerceAtLeast(0)
         val elapsedSeconds = intent.getLongExtra(DownloadService.EXTRA_ELAPSED_SECONDS, 0).coerceAtLeast(0)
+        if (state == DownloadService.STATE_QUEUED) {
+            _uiState.update { current ->
+                val events = if (message.isNotBlank()) {
+                    (listOf(message) + current.transferEvents).take(80)
+                } else {
+                    current.transferEvents
+                }
+                current.copy(
+                    activeTab = SonyEdgeTab.Transfers,
+                    downloadMessage = message.ifBlank { current.downloadMessage },
+                    queuedTransferCount = queuedTransferCount,
+                    transferEvents = events
+                )
+            }
+            return
+        }
         _uiState.update { current ->
             val completed = (success + failed).coerceIn(0, total)
             val events = if (state in eventStates && message.isNotBlank()) {
@@ -1471,6 +1535,11 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
             }
             current.copy(
                 transferHistory = history,
+                downloadBatchTitle = if (state == DownloadService.STATE_STARTED && batchTitle.isNotBlank()) {
+                    batchTitle
+                } else {
+                    current.downloadBatchTitle
+                },
                 downloadCurrentFile = if (filename.isNotBlank()) filename else current.downloadCurrentFile,
                 activeTab = if (state == DownloadService.STATE_STARTED) SonyEdgeTab.Transfers else current.activeTab,
                 downloadMessage = message.ifBlank { current.downloadMessage },
@@ -1485,6 +1554,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
                 downloadEtaSeconds = etaSeconds,
                 downloadBatchBytesDone = batchBytesDone,
                 downloadElapsedSeconds = elapsedSeconds,
+                queuedTransferCount = queuedTransferCount,
                 transferEvents = events,
                 failedItems = failedItems
             )
@@ -1547,6 +1617,7 @@ class SonyEdgeViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private val eventStates = setOf(
+            DownloadService.STATE_QUEUED,
             DownloadService.STATE_FILE_DONE,
             DownloadService.STATE_FILE_FAILED,
             DownloadService.STATE_DONE,
@@ -1820,7 +1891,8 @@ fun supportsCameraSelection(session: SonyCameraSession): Boolean =
         }
 
 fun isDownloadTransferActive(state: SonyEdgeUiState): Boolean =
-    state.downloadTotal > 0 &&
+    state.queuedTransferCount > 0 ||
+        (state.downloadTotal > 0 &&
         state.downloadProgress < state.downloadTotal &&
         state.downloadState in setOf(
             DownloadService.STATE_STARTED,
@@ -1828,7 +1900,7 @@ fun isDownloadTransferActive(state: SonyEdgeUiState): Boolean =
             DownloadService.STATE_FILE_PROGRESS,
             DownloadService.STATE_FILE_DONE,
             DownloadService.STATE_FILE_FAILED
-        )
+        ))
 
 fun isCameraTransferBusy(state: SonyEdgeUiState): Boolean =
     state.cameraSelectionReceiving ||
