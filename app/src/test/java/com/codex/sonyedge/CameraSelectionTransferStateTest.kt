@@ -15,6 +15,15 @@ class CameraSelectionTransferStateTest {
     }
 
     @Test
+    fun queuedDownloadRemainsActive() {
+        assertTrue(
+            isDownloadTransferActive(
+                SonyEdgeUiState(queuedTransferCount = 1)
+            )
+        )
+    }
+
+    @Test
     fun completedDownloadIsTerminal() {
         assertTrue(
             isCameraSelectionTransferTerminal(

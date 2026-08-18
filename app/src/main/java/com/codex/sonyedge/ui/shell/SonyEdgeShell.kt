@@ -94,6 +94,7 @@ class SonyEdgeActions(
     val onClosePreview: () -> Unit,
     val onPreviewNext: (Int) -> Unit,
     val onPreviewPage: (Int) -> Unit,
+    val onGridScrollPosition: (Int, Int) -> Unit,
     val onToggleSelection: (CameraContentItem) -> Unit,
     val onSelectAll: () -> Unit,
     val onClearSelection: () -> Unit,
