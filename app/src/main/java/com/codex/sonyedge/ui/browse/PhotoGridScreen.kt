@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,7 +53,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -67,6 +71,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import com.codex.sonyedge.CameraContentItem
 import com.codex.sonyedge.SonyEdgeUiState
 import com.codex.sonyedge.itemKey
@@ -103,7 +109,9 @@ fun PhotoGridScreen(state: SonyEdgeUiState, actions: SonyEdgeActions, widthDp: D
                 state.errorMessage != null && !state.loading -> GridTimeoutState(actions)
                 state.loading && state.photos.isEmpty() -> GridSkeleton(widthDp)
                 state.photos.isEmpty() && !state.loading -> EmptyFolderState()
-                else -> PhotoGrid(state, actions, widthDp, selectionMode)
+                else -> key(state.currentFolderId) {
+                    PhotoGrid(state, actions, widthDp, selectionMode)
+                }
             }
         }
 
@@ -243,6 +251,19 @@ private fun PhotoGrid(
     widthDp: Dp,
     selectionMode: Boolean
 ) {
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = state.gridFirstVisibleItemIndex,
+        initialFirstVisibleItemScrollOffset = state.gridFirstVisibleItemOffset
+    )
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+        }
+            .distinctUntilChanged()
+            .collectLatest { (index, offset) ->
+                actions.onGridScrollPosition(index, offset)
+            }
+    }
     val minCell = when {
         widthDp >= 840.dp -> Dimens.gridMinCellExpanded
         widthDp >= 600.dp -> Dimens.gridMinCellMedium
@@ -255,6 +276,7 @@ private fun PhotoGrid(
         contentPadding = PaddingValues(
             bottom = if (selectionMode) Dimens.gridSelectionBottomInset else 16.dp
         ),
+        state = gridState,
         modifier = Modifier.fillMaxSize()
     ) {
         items(state.photos, key = { itemKey(it) }) { item ->
@@ -307,7 +329,7 @@ private fun PhotoTile(
                 }
             )
             .combinedClickable(
-                onClick = { if (selectionMode) onToggle() else onPreview() },
+                onClick = onPreview,
                 onLongClick = onLongPress
             )
     ) {

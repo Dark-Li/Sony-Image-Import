@@ -65,6 +65,7 @@ class ComposeMainActivity : ComponentActivity() {
             onClosePreview = viewModel::closePreview,
             onPreviewNext = viewModel::previewNext,
             onPreviewPage = viewModel::setPreviewIndex,
+            onGridScrollPosition = viewModel::setGridScrollPosition,
             onToggleSelection = viewModel::toggleSelection,
             onSelectAll = viewModel::selectAllVisible,
             onClearSelection = viewModel::clearSelection,

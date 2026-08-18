@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.codex.sonyedge.CameraConnectPhase
+import com.codex.sonyedge.QueuedTransfer
 import com.codex.sonyedge.SonyEdgeTab
 import com.codex.sonyedge.SonyEdgeUiState
 import com.codex.sonyedge.TransferOutcome
@@ -63,7 +64,8 @@ fun TransfersScreen(state: SonyEdgeUiState, actions: SonyEdgeActions) {
     val disconnected = state.connectPhase != CameraConnectPhase.Connected
     val showInterruptBanner = disconnected &&
         (active || state.transferHistory.firstOrNull()?.outcome == TransferOutcome.Interrupted)
-    val hasContent = active || state.transferHistory.isNotEmpty()
+    val hasContent = active || state.queuedTransferCount > 0 ||
+        state.queuedTransfers.isNotEmpty() || state.transferHistory.isNotEmpty()
 
     Column(
         Modifier
@@ -100,6 +102,11 @@ fun TransfersScreen(state: SonyEdgeUiState, actions: SonyEdgeActions) {
                         ActiveTransferCard(state, actions, interrupted = disconnected)
                     }
                 }
+                if (state.queuedTransferCount > 0 || state.queuedTransfers.isNotEmpty()) {
+                    item(key = "queued") {
+                        QueuedTransfersCard(state.queuedTransfers, state.queuedTransferCount)
+                    }
+                }
                 items(state.transferHistory, key = { it.id }) { record ->
                     HistoryTransferCard(
                         record = record,
@@ -110,6 +117,90 @@ fun TransfersScreen(state: SonyEdgeUiState, actions: SonyEdgeActions) {
                 }
                 item { Spacer(Modifier.height(20.dp)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun QueuedTransfersCard(transfers: List<QueuedTransfer>, fallbackCount: Int) {
+    val colors = SonyEdgeTheme.colors
+    val visibleTransfers = transfers.take(20)
+    TokenCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "排队中的导入",
+                color = colors.text1,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            MonoText(
+                "当前任务完成后会按顺序继续导入",
+                color = colors.text3,
+                fontSize = 12.5.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            if (visibleTransfers.isEmpty()) {
+                MonoText(
+                    "还有 $fallbackCount 个导入任务排队",
+                    color = colors.text2,
+                    fontSize = 13.sp
+                )
+            } else {
+                visibleTransfers.forEachIndexed { index, transfer ->
+                    QueuedTransferRow(index + 1, transfer)
+                    if (index != visibleTransfers.lastIndex) {
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+                if (transfers.size > visibleTransfers.size) {
+                    Spacer(Modifier.height(10.dp))
+                    MonoText(
+                        "还有 ${transfers.size - visibleTransfers.size} 个任务未展开",
+                        color = colors.text3,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueuedTransferRow(position: Int, transfer: QueuedTransfer) {
+    val colors = SonyEdgeTheme.colors
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(28.dp)
+                .background(colors.surface2, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "$position",
+                color = colors.accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                transfer.title.ifBlank { "导入任务" },
+                color = colors.text1,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            MonoText(
+                "${transfer.total} 张照片",
+                color = colors.text3,
+                fontSize = 12.sp
+            )
         }
     }
 }

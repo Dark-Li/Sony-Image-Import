@@ -41,6 +41,15 @@ public final class DiscoveryClient {
     private static final int DESCRIPTION_CONNECT_TIMEOUT_MS = 3000;
     private static final int DESCRIPTION_READ_TIMEOUT_MS = 4000;
     private static final int MAX_DESCRIPTION_BYTES = 1024 * 1024;
+    private static final int LEGACY_DESCRIPTION_PORT = 64321;
+    private static final String DEFAULT_LEGACY_CAMERA_HOST = "192.168.122.1";
+    private static final String[] LEGACY_DESCRIPTION_PATHS = {
+            "/dd.xml",
+            "/DmsDesc.xml",
+            "/device.xml",
+            "/scalarwebapi_dd.xml",
+            "/ScalarWebAPI.xml"
+    };
     private static final String[] SEARCH_TARGETS = {
             "ssdp:all",
             "upnp:rootdevice",
@@ -153,8 +162,19 @@ public final class DiscoveryClient {
         return new ArrayList<>(responses.values());
     }
 
-    /** Fetches each unique SSDP LOCATION once and parses the full UPnP device description. */
+    /**
+     * Fetches each unique SSDP LOCATION once and parses the full UPnP device description.
+     *
+     * Older Sony cameras can expose a perfectly valid dd.xml without answering the
+     * SSDP query reliably. Keep the standard SSDP path first, then fall back to the
+     * camera-network gateway and the legacy Sony default host.
+     */
     public List<SonyDeviceDescription> discoverDevices(StringBuilder log) {
+        return discoverDevices(log, legacyCameraHosts());
+    }
+
+    /** Same discovery flow with caller-provided legacy hosts, primarily for diagnostics/tests. */
+    public List<SonyDeviceDescription> discoverDevices(StringBuilder log, Set<String> fallbackHosts) {
         LinkedHashMap<String, String> locations = new LinkedHashMap<>();
         for (SsdpResponse response : discoverSsdpResponses(log)) {
             try {
@@ -169,13 +189,88 @@ public final class DiscoveryClient {
         List<SonyDeviceDescription> devices = new ArrayList<>();
         for (String location : locations.values()) {
             try {
-                devices.add(fetchDeviceDescription(location, log));
+                SonyDeviceDescription device = fetchDeviceDescription(location, log);
+                devices.add(device);
             } catch (Exception ex) {
                 append(log, "Device description failed " + location + ": " + message(ex));
                 Log.w(TAG_UPNP, "Description failed: " + location, ex);
             }
         }
+
+        if (!containsUsableSonyService(devices)) {
+            List<String> fallbackLocations = legacyDescriptionLocations(fallbackHosts);
+            append(log, "SSDP did not expose a usable Sony service; probing legacy descriptions "
+                    + fallbackLocations);
+            for (String location : fallbackLocations) {
+                if (locations.containsKey(location)) {
+                    continue;
+                }
+                try {
+                    SonyDeviceDescription device = fetchDeviceDescription(location, log);
+                    devices.add(device);
+                    locations.put(location, location);
+                    append(log, "Legacy device description accepted " + location
+                            + " friendly=" + device.friendlyName
+                            + " services=" + device.services.size());
+                    if (containsUsableSonyService(java.util.Collections.singletonList(device))) {
+                        break;
+                    }
+                } catch (Exception ex) {
+                    append(log, "Legacy device description failed " + location + ": " + message(ex));
+                }
+            }
+        }
         return devices;
+    }
+
+    static List<String> legacyDescriptionLocations(Set<String> hosts) {
+        LinkedHashSet<String> locations = new LinkedHashSet<>();
+        if (hosts == null) {
+            return new ArrayList<>();
+        }
+        for (String host : hosts) {
+            if (host == null || host.trim().isEmpty() || "0.0.0.0".equals(host.trim())) {
+                continue;
+            }
+            String normalizedHost = host.trim();
+            for (String path : LEGACY_DESCRIPTION_PATHS) {
+                locations.add("http://" + normalizedHost + ":" + LEGACY_DESCRIPTION_PORT + path);
+            }
+        }
+        return new ArrayList<>(locations);
+    }
+
+    private Set<String> legacyCameraHosts() {
+        LinkedHashSet<String> hosts = new LinkedHashSet<>();
+        try {
+            if (context != null) {
+                WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                if (wifiManager != null && wifiManager.getDhcpInfo() != null) {
+                    int gateway = wifiManager.getDhcpInfo().gateway;
+                    if (gateway != 0) {
+                        hosts.add((gateway & 0xff) + "."
+                                + ((gateway >> 8) & 0xff) + "."
+                                + ((gateway >> 16) & 0xff) + "."
+                                + ((gateway >> 24) & 0xff));
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            Log.d(TAG_UPNP, "Could not read Wi-Fi gateway for legacy discovery", ex);
+        }
+        hosts.add(DEFAULT_LEGACY_CAMERA_HOST);
+        return hosts;
+    }
+
+    private boolean containsUsableSonyService(List<SonyDeviceDescription> devices) {
+        for (SonyDeviceDescription device : devices) {
+            for (SonyServiceDescription service : device.services) {
+                if (service.isContentDirectory() || service.isScalarWebApi()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isSonyResponse(SsdpResponse response) {

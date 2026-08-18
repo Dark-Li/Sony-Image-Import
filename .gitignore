@@ -9,3 +9,7 @@ local.properties
 *.hprof
 .agents/
 .codex/
+app/src/main/res/drawable-nodpi/ic_launcher_artwork.png
+assets/icons/sony-camera-transfer-designed.svg
+assets/icons/sony-camera-transfer-exact.svg
+assets/icons/sony-camera-transfer.svg
